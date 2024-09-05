@@ -12,8 +12,8 @@ class DrivePublisher(Node):
         self.i = 0
 
         # Declare parameters, Speed and Steering Angle
-        self.declare_parameter('v', float(0))   # Speed
-        self.declare_parameter('d', float(0))   # Steering Angle
+        self.declare_parameter('v', rclpy.Parameter.Type.DOUBLE)   # Speed
+        self.declare_parameter('d', rclpy.Parameter.Type.DOUBLE)   # Steering Angle
 
     def timer_callback(self):
         v = self.get_parameter('v').get_parameter_value().double_value
@@ -24,10 +24,7 @@ class DrivePublisher(Node):
         ack_msg.drive.steering_angle = float(d)
         self.publisher_.publish(ack_msg)
 
-        # msg = String()
-        # msg.data = 'Hello World: %d' % self.i
-        # self.publisher_.publish(msg)
-        self.get_logger().info('Publishing: "%s"' % ack_msg)
+        self.get_logger().info('\nPublishing: "%s"\n\n' % ack_msg)
         self.i += 1
 
 def main(args=None):
@@ -42,4 +39,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-
