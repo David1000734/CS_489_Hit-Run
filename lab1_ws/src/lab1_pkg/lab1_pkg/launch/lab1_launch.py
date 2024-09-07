@@ -5,16 +5,8 @@ from launch.substitutions import LaunchConfiguration
 
 def generate_launch_description():
 
-    v = LaunchConfiguration('v')
-    d = LaunchConfiguration('d')
-
-    # v = DeclareLaunchArgument('v', default_value=float(17))
-    # d = DeclareLaunchArgument('d', default_value=float(88))
-
-    # TEMP
-    if (v == None):
-        v = float(5.3)
-        d = float(32.4)
+    v = LaunchConfiguration('v', default = '0.0')
+    d = LaunchConfiguration('d', default = '0.0')
 
     ld = LaunchDescription()
 
