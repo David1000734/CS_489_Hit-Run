@@ -11,6 +11,11 @@ def generate_launch_description():
     # v = DeclareLaunchArgument('v', default_value=float(17))
     # d = DeclareLaunchArgument('d', default_value=float(88))
 
+    # TEMP
+    if (v == None):
+        v = float(5.3)
+        d = float(32.4)
+
     ld = LaunchDescription()
 
     talker_node = Node(

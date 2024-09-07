@@ -21,7 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'talker = lab1_pkg.talker:main',
-            'listener = lab1_pkg.relay:main',
+            'relay = lab1_pkg.relay:main',
         ],
     },
 )

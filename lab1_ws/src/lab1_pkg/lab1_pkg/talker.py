@@ -6,14 +6,18 @@ from ackermann_msgs.msg import AckermannDriveStamped
 class DrivePublisher(Node):
     def __init__(self):
         super().__init__('DrivePublisher')
-        self.publisher_ = self.create_publisher(AckermannDriveStamped, 'drive', 10)
+        self.publisher_ = self.create_publisher(
+            AckermannDriveStamped,
+            'drive',
+            10)
+
         timer_period = 0.5      # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
         self.i = 0
 
         # Declare parameters, Speed and Steering Angle
-        self.declare_parameter('v', rclpy.Parameter.Type.DOUBLE)   # Speed
-        self.declare_parameter('d', rclpy.Parameter.Type.DOUBLE)   # Steering Angle
+        self.declare_parameter('v', float(0))   # Speed
+        self.declare_parameter('d', float(0))   # Steering Angle
 
     def timer_callback(self):
         v = self.get_parameter('v').get_parameter_value().double_value
@@ -24,7 +28,8 @@ class DrivePublisher(Node):
         ack_msg.drive.steering_angle = float(d)
         self.publisher_.publish(ack_msg)
 
-        self.get_logger().info('\nPublishing: "%s"\n\n' % ack_msg)
+        self.get_logger().info('\nPublishing: V: "%s" and D: "%s".\n'\
+                               % (ack_msg.drive.speed, ack_msg.drive.steering_angle))
         self.i += 1
 
 def main(args=None):
