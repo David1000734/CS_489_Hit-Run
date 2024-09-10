@@ -14,7 +14,7 @@ class DrivePublisher(Node):
         
         self.publisher_ = self.create_publisher(
             AckermannDriveStamped,
-            'talker/drive',
+            'drive',
             10)
 
         self.subscription  # prevent unused variable warning
@@ -25,7 +25,7 @@ class DrivePublisher(Node):
         msg.drive.speed *= 3
         msg.drive.steering_angle *= 3
 
-        self.publisher_.publish(msg)
+        # self.publisher_.publish(msg)
 
         self.get_logger().info('\nUPDATED INFO V: "%s" and D: "%s" and published.\n' \
                                % (msg.drive.speed, msg.drive.steering_angle))
