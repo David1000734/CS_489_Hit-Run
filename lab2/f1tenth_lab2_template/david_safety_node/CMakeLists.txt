@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(safety_node)
+project(david_safety_node)		#EDITED BREANNA
 
 # Default to C++14
 if(NOT CMAKE_CXX_STANDARD)
@@ -28,15 +28,15 @@ endforeach()
 # Include Cpp "include" directory
 include_directories(include)
 
-# Create Cpp executable
-add_executable(safety_node src/safety_node.cpp)
-ament_target_dependencies(safety_node 
+# Create Cpp executable	EDITED
+add_executable(david_safety_node src/david_safety_node.cpp)
+ament_target_dependencies(david_safety_node
   rclcpp geometry_msgs ackermann_msgs nav_msgs sensor_msgs std_msgs
 )
 
 # Install Cpp executables
 install(TARGETS
-  safety_node
+  david_safety_node
   DESTINATION lib/${PROJECT_NAME})
 
 # Install Python modules
@@ -44,7 +44,7 @@ ament_python_install_package(${PROJECT_NAME})
 
 # Install Python executables
 install(PROGRAMS
-  scripts/safety_node.py
+  scripts/david_safety_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
