@@ -1,18 +1,12 @@
+// Get the pi constant
+#define _USE_MATH_DEFINES
+#include <math.h>
+
 #include "rclcpp/rclcpp.hpp"
 /// CHECK: include needed ROS msg type headers and libraries
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "ackermann_msgs/msg/ackermann_drive_stamped.hpp"
-
-// Get std_msg::string
-// #include "std_msgs/msg/string.hpp"
-
-// #include <chrono>
-// #include <functional>
-// #include <memory>
-// #include <string>
-
-// #include "rclcpp/rclcpp.hpp"
 
 using namespace std::chrono_literals;
 using std::placeholders::_1;
@@ -98,14 +92,14 @@ private:
 
     void timer_callback() {
         ackermann_msgs::msg::AckermannDriveStamped message = ackermann_msgs::msg::AckermannDriveStamped();
-        RCLCPP_INFO(this -> get_logger(), "I published: %f", message.drive.speed);
+        // RCLCPP_INFO(this -> get_logger(), "I published: %f", message.drive.speed);
         publisher_ -> publish(message);
 
     }
 
     void topic_callback(ackermann_msgs::msg::AckermannDriveStamped::ConstSharedPtr msg) const {
         std::cout << "subscribed value: " << msg -> drive.speed << std::endl;
-        RCLCPP_INFO(this -> get_logger(), "I heard: '%f'.", msg -> drive.speed);
+        // RCLCPP_INFO(this -> get_logger(), "I heard: '%f'.", msg -> drive.speed);
 
     }
 
@@ -114,22 +108,84 @@ private:
         /// TODO: update current speed
         speed = msg -> twist.twist.linear.x;
 
-        RCLCPP_INFO(this -> get_logger(), "Odom Reading X: %f\tY: %f\tZ: %f.",
-        msg -> twist.twist.linear.x,
-        msg -> twist.twist.linear.y,
-        msg -> twist.twist.linear.z);
+        // RCLCPP_INFO(this -> get_logger(), "Odom Reading X: %f\tY: %f\tZ: %f.",
+        // msg -> twist.twist.linear.x,
+        // msg -> twist.twist.linear.y,
+        // msg -> twist.twist.linear.z);
     }
 
     void scan_callback(const sensor_msgs::msg::LaserScan::ConstSharedPtr scan_msg) 
     {
         /// TODO: calculate TTC
-        RCLCPP_INFO(this -> get_logger(), "Scan Min: %f\tScan Max: %f\tScan Increment: %f.",
-        scan_msg -> angle_min,
-        scan_msg -> angle_max,
-        scan_msg -> angle_increment);
+        // RCLCPP_INFO(this -> get_logger(), "Scan Min: %f\tScan Max: %f\tScan Increment: %f.",
+        // scan_msg -> angle_min,
+        // scan_msg -> angle_max,
+        // scan_msg -> angle_increment);
+
+        // RCLCPP_INFO(this -> get_logger(), "Min: %f%\tMax: %f%\tIncrement: %f%",
+        // radian_to_degree(scan_msg -> angle_min),
+        // radian_to_degree(scan_msg -> angle_max),
+        // radian_to_degree(scan_msg -> angle_increment));
+
+        try {
+
+            calculate_TTC(scan_msg -> ranges,
+                        scan_msg -> angle_increment,
+                        scan_msg -> angle_min,
+                        scan_msg -> angle_max);
+        } catch (int x) {
+            // Post to ackermann where speed = 0
+            RCLCPP_INFO(this -> get_logger(), "Speed before: %f", this -> speed);
+
+            ackermann_msgs::msg::AckermannDriveStamped message = ackermann_msgs::msg::AckermannDriveStamped();
+            message.drive.speed = 0;
+            RCLCPP_INFO(this -> get_logger(), "post: %f", message.drive.speed);
+            publisher_ -> publish(message);
+        }
 
         /// TODO: publish drive/brake message
     }
+
+    // Convert radian to degrees
+    double radian_to_degree(double radian) {
+        return (radian * (180 / M_PI));
+    }
+
+    // Calculate the angle given the index of the array
+    // and the angle increment
+    double calculate_angle(int index, double increment) {
+        return (radian_to_degree(index * increment));
+    }
+
+    void calculate_TTC(const std::vector<float> arr, double increment, double min, double max) {
+        int length = arr.size();
+
+        // Iterate through our array and calculate the TTC for each
+        for (int i = 0; i < length; i++) {
+            // TTC = (range[idx]) / (-1 * (speed * cos(angle[idx])))
+            // TLDR: Top part will be the range at each index
+            // The range is in meters
+            if (arr[i] > max || arr[i] < min) {
+                // Values outside of the min and max are ignored
+                continue;
+            }
+
+            // Bottom part: current speed * cos of the current angle <negated>
+            double bottom_part = this -> speed * cos(calculate_angle(i, increment));
+            bottom_part *= -1;
+
+            double calc = arr[i] / bottom_part;
+
+            // If our value is less than the threshhold, then stop the car
+            if (calc < 2 && calc > 0) {
+                // Values that is -inf or higher than our threshold is ignored
+                throw -1;
+            }
+        }
+        
+    }
+
+
 };
 int main(int argc, char ** argv) {
     rclcpp::init(argc, argv);
