@@ -14,7 +14,7 @@ class SafetyNode(Node):
     The class that handles emergency braking.
     """
     def __init__(self):
-        super().__init__('safety_node')
+        super().__init__('David_Python_Safety_Node')
         """
         One publisher should publish to the /drive topic with a AckermannDriveStamped drive message.
 

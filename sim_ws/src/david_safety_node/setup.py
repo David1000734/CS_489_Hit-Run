@@ -1,6 +1,6 @@
 from setuptools import setup
 
-package_name = 'safety_node'
+package_name = 'david_safety_node'
 
 setup(
     name=package_name,
