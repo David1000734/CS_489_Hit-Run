@@ -1,7 +1,3 @@
-// Get the pi constant
-#define _USE_MATH_DEFINES
-#include <math.h>
-
 #include "rclcpp/rclcpp.hpp"
 /// CHECK: include needed ROS msg type headers and libraries
 #include "sensor_msgs/msg/laser_scan.hpp"
@@ -28,6 +24,15 @@ public:
         NOTE that the x component of the linear velocity in odom is the speed
         */
 
+        this -> declare_parameter("ttc", 0.0);
+        this -> declare_parameter("mode", "sim");
+        std::string sim_car = "/odom";
+
+        // Set the topic for sim or physical car
+        if (this -> get_parameter("mode").as_string() == "sim") {
+            sim_car = "/ego_racecar/odom";
+        }
+
         /// TODO: create ROS subscribers and publishers
         // Create publisher
         publisher_ = create_publisher<ackermann_msgs::msg::AckermannDriveStamped>(
@@ -35,35 +40,12 @@ public:
             10
         );
 
-        timer_ = this -> create_wall_timer(
-            500ms,
-            std::bind(&Safety::timer_callback, this)
-        );
-
-        // Create subscriber
-        subscription_ = this -> create_subscription<ackermann_msgs::msg::AckermannDriveStamped>(
-            "/drive",
-            10,
-            std::bind(&Safety::topic_callback, this, _1)
-        );
-        
         // Odometry subscriber
         odom_Subscription_ = this -> create_subscription<nav_msgs::msg::Odometry>(
-            "/ego_racecar/odom",
+            sim_car,
             10,
             std::bind(&Safety::drive_callback, this, _1)
         );
-        /// It don't work :(
-        // scan_Publisher_ = create_publisher<sensor_msgs::msg::LaserScan>(
-        //     "/scan",
-        //     1
-        // );
-
-        // sensor_msgs::msg::LaserScan min_max_scan = sensor_msgs::msg::LaserScan();
-        // min_max_scan.angle_min = -1.8;
-        // min_max_scan.angle_max = 1.8;
-        // scan_Publisher_ -> publish(min_max_scan);
-
 
         // Laser scan subscriber
         scan_Subscription_ = this -> create_subscription<sensor_msgs::msg::LaserScan>(
@@ -78,30 +60,17 @@ public:
 
 private:
     double speed = 0.0;
+    const double PI = 3.1415926535;
 
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Publisher<ackermann_msgs::msg::AckermannDriveStamped>::SharedPtr publisher_;
     rclcpp::Subscription<ackermann_msgs::msg::AckermannDriveStamped>::SharedPtr subscription_;
     
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_Subscription_;
-    // rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr scan_Publisher_;
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_Subscription_;
 
     size_t count_;
     /// TODO: create ROS subscribers and publishers
-
-    void timer_callback() {
-        ackermann_msgs::msg::AckermannDriveStamped message = ackermann_msgs::msg::AckermannDriveStamped();
-        // RCLCPP_INFO(this -> get_logger(), "I published: %f", message.drive.speed);
-        publisher_ -> publish(message);
-
-    }
-
-    void topic_callback(ackermann_msgs::msg::AckermannDriveStamped::ConstSharedPtr msg) const {
-        std::cout << "subscribed value: " << msg -> drive.speed << std::endl;
-        // RCLCPP_INFO(this -> get_logger(), "I heard: '%f'.", msg -> drive.speed);
-
-    }
 
     void drive_callback(const nav_msgs::msg::Odometry::ConstSharedPtr msg)
     {
@@ -127,41 +96,51 @@ private:
         // radian_to_degree(scan_msg -> angle_max),
         // radian_to_degree(scan_msg -> angle_increment));
 
+        /// TODO: publish drive/brake message
         try {
-
             calculate_TTC(scan_msg -> ranges,
-                        scan_msg -> angle_increment,
-                        scan_msg -> angle_min,
-                        scan_msg -> angle_max);
-        } catch (int x) {
+                        scan_msg -> angle_increment);
+        } catch (double x) {
             // Post to ackermann where speed = 0
-            RCLCPP_INFO(this -> get_logger(), "Speed before: %f", this -> speed);
-
             ackermann_msgs::msg::AckermannDriveStamped message = ackermann_msgs::msg::AckermannDriveStamped();
             message.drive.speed = 0;
-            RCLCPP_INFO(this -> get_logger(), "post: %f", message.drive.speed);
+            RCLCPP_INFO(this -> get_logger(),
+                        "Emergency Break with TTC at %f", x);
             publisher_ -> publish(message);
         }
 
-        /// TODO: publish drive/brake message
     }
 
     // Convert radian to degrees
     double radian_to_degree(double radian) {
-        return (radian * (180 / M_PI));
+        return (radian * (180 / PI));
     }
 
     // Calculate the angle given the index of the array
     // and the angle increment
     double calculate_angle(int index, double increment) {
-        return (radian_to_degree(index * increment));
+        return (index * increment);
     }
 
-    void calculate_TTC(const std::vector<float> arr, double increment, double min, double max) {
-        int length = arr.size();
+    /// @brief Function will calculate the time to colission. This function will
+    /// also ignore a lot of the values that exceed or is smaller than a particular range.
+    ///
+    /// @param arr Laser scan array. This array is in terms of meters.
+    ///
+    /// @param increment The increment of each angle from 0 to the max in radians
+    ///
+    /// @param min The max meters to consider for the the TTC calculation
+    ///
+    /// @param max The minimum meaters to consider. Set to 0
+    void calculate_TTC(const std::vector<float> arr, double increment, double min = 0.0) {
+        // We will only consider 60% from the center of the scan
+        // this mean arr.size() * (300 / 360) = 900
+        // So, we will start from 450 and go up to 1080 - 450
+        double ttc = this -> get_parameter("ttc").as_double();
+        double max = log2(ttc) + 1;
 
         // Iterate through our array and calculate the TTC for each
-        for (int i = 0; i < length; i++) {
+        for (int i = 450; i < 630; i++) {
             // TTC = (range[idx]) / (-1 * (speed * cos(angle[idx])))
             // TLDR: Top part will be the range at each index
             // The range is in meters
@@ -174,19 +153,18 @@ private:
             double bottom_part = this -> speed * cos(calculate_angle(i, increment));
             bottom_part *= -1;
 
-            double calc = arr[i] / bottom_part;
+            double calc = arr[i] / std::max(bottom_part, 0.0);
 
             // If our value is less than the threshhold, then stop the car
-            if (calc < 2 && calc > 0) {
+            if (calc < ttc && calc > 0) {
                 // Values that is -inf or higher than our threshold is ignored
-                throw -1;
+                throw calc;
             }
         }
         
     }
-
-
 };
+
 int main(int argc, char ** argv) {
     rclcpp::init(argc, argv);
     rclcpp::spin(std::make_shared<Safety>());
