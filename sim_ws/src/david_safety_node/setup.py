@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'david_safety_node = david_safety_node.david_safety_node:main', #EDITED
+            'nick_safety_node = david_safety_node.nick_safety_node:main', #EDITED
         ],
     },
 )

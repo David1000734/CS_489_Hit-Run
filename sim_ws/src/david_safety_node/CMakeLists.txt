@@ -33,10 +33,18 @@ add_executable(david_safety_node src/david_safety_node.cpp)
 ament_target_dependencies(david_safety_node
   rclcpp geometry_msgs ackermann_msgs nav_msgs sensor_msgs std_msgs
 )
+add_executable(nick_safety_node src/nick_safety_node.cpp)
+ament_target_dependencies(nick_safety_node
+  rclcpp geometry_msgs ackermann_msgs nav_msgs sensor_msgs std_msgs
+)
 
 # Install Cpp executables
 install(TARGETS
   david_safety_node
+  DESTINATION lib/${PROJECT_NAME})
+
+install(TARGETS
+  nick_safety_node
   DESTINATION lib/${PROJECT_NAME})
 
 # Install Python modules
