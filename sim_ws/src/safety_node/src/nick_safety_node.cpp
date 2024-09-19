@@ -24,7 +24,7 @@ public:
 
         this -> declare_parameter("ttc", 0.0);
         this -> declare_parameter("mode", "sim");
-        std::string sim_car = "/odom"
+        std::string sim_car = "/odom";
 
         if (this -> get_parameter("mode").as_string() == "sim"){
             sim_car = "/ego_racecar/odom";
