@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(david_safety_node)		#EDITED BREANNA
+project(safety_node)		#EDITED BREANNA
 
 # Default to C++14
 if(NOT CMAKE_CXX_STANDARD)

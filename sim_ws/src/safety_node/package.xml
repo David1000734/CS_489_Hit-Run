@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>david_safety_node</name>
+  <name>safety_node</name>
   <version>0.0.0</version>
   <description>Skeleton code for Lab 1: Automatic Emergency Braking at University of Pennsylvania</description>
   <maintainer email="billyzheng.bz@gmail.com">Hongrui Zheng</maintainer>
