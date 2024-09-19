@@ -1,7 +1,7 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, TextSubstitution
 from launch.conditions import IfCondition
 
 def generate_launch_description():
@@ -10,40 +10,18 @@ def generate_launch_description():
     ttc = LaunchConfiguration('ttc', default = '1.0')
     mode = LaunchConfiguration('mode', default = 'sim')
     student = LaunchConfiguration('student', default = 'david')
-    # print(student)
-    # student = "david"
 
-    nodes = []
+    package_name = [student, TextSubstitution(text = '_safety_node')]
+    
+    pkg_node = Node(
+        package = package_name,
+        executable = package_name,
+        parameters = [
+            {'ttc' : ttc},
+            {'mode' : mode}
+        ]
+    )
 
-    # print("Start")
-    # print(student)
-    # if (IfCondition(LaunchConfiguration('student') == student)):
-    if (student == "david"):
-        nodes.append(Node(
-            package="david_safety_node",
-            executable="david_safety_node",
-            parameters = [
-                {'ttc' : ttc},
-                {'mode' : mode}
-            ]
-        ))
-    else:
-        pass
-
-    # match student:
-    #     case "david":
-    #         talker_node = Node(
-    #             package="david_safety_node",
-    #             executable="david_safety_node",
-    #             parameters = [
-    #                 {'ttc' : ttc},
-    #                 {'mode' : mode}
-    #             ]
-    #         )
-    #     case _:
-    #         print("Nothing Ran...")
-
-    for node in nodes:
-        ld.add_action(node)
+    ld.add_action(pkg_node)
 
     return ld
