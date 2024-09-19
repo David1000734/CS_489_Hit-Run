@@ -9,7 +9,7 @@ using std::placeholders::_1;
 
 class Safety : public rclcpp::Node {
 public:
-    Safety() : Node("Nick_Safety_Node")
+    Safety() : Node("prabh_safety_node")
     {
         // get parm to determine if in sim or on car
         this->declare_parameter("mode");

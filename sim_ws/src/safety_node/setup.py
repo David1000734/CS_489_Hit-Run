@@ -22,6 +22,8 @@ setup(
         'console_scripts': [
             'david_safety_node = safety_node.david_safety_node:main', #EDITED
             'nick_safety_node = safety_node.nick_safety_node:main', #EDITED
+            'billy_safety_node = safety_node.billy_safety_node:main', #EDITED
+            'prabh_safety_node = safety_node.prabh_safety_node:main', #EDITED
         ],
     },
 )
