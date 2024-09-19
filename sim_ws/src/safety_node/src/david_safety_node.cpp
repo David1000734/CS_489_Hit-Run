@@ -137,7 +137,7 @@ private:
         // this mean arr.size() * (300 / 360) = 900
         // So, we will start from 450 and go up to 1080 - 450
         double ttc = this -> get_parameter("ttc").as_double();
-        double max = log2(ttc) + 1;
+        double max = log2(ttc) + 3;
 
         // Iterate through our array and calculate the TTC for each
         for (int i = 450; i < 630; i++) {
