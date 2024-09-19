@@ -14,7 +14,7 @@ def generate_launch_description():
     package_name = [student, TextSubstitution(text = '_safety_node')]
     
     pkg_node = Node(
-        package = "david_safety_node",
+        package = "safety_node",
         executable = package_name,
         parameters = [
             {'ttc' : ttc},

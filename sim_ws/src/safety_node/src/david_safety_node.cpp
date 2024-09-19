@@ -11,7 +11,7 @@ class Safety : public rclcpp::Node {
 // The class that handles emergency braking
 
 public:
-    Safety() : Node("David_Cpp_Safety_Node"), count_(0)
+    Safety() : Node("David_Safety_Node"), count_(0)
     {
         /*
         You should also subscribe to the /scan topic to get the
