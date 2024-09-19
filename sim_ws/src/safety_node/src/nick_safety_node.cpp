@@ -1,113 +1,115 @@
 #include "rclcpp/rclcpp.hpp"
+/// CHECK: include needed ROS msg type headers and libraries
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "ackermann_msgs/msg/ackermann_drive_stamped.hpp"
-#include <string>
-#include <cmath>
-using namespace std::chrono_literals;
-using std::placeholders::_1;
+#include <math.h>
 
 class Safety : public rclcpp::Node {
+// The class that handles emergency braking
+
 public:
-    Safety() : Node("Nick_Safety_Node")
+    Safety() : Node("billy_safety_node")
     {
-        // get parm to determine if in sim or on car
-        this->declare_parameter("mode");
-        this->declare_parameter("ttc");
+        /*
+        You should also subscribe to the /scan topic to get the
+        sensor_msgs/LaserScan messages and the /ego_racecar/odom topic to get
+        the nav_msgs/Odometry messages
 
-        std::string mode = this->get_parameter("mode").as_string();
+        The subscribers should use the provided odom_callback and 
+        scan_callback as callback methods
 
-        // Subscribe to the /ego_racecar/odom topic to get speed data from Odometry
-        if(mode == "sim")
-        {
-            odom_subscriber_ = this->create_subscription<nav_msgs::msg::Odometry>("/ego_racecar/odom", 10, std::bind(&Safety::drive_callback, this, _1));
+        NOTE that the x component of the linear velocity in odom is the speed
+        */
+
+        this -> declare_parameter("ttc", 0.0);
+        this -> declare_parameter("mode", "sim");
+        std::string sim_car = "/odom"
+
+        if (this -> get_parameter("mode").as_string() == "sim"){
+            sim_car = "/ego_racecar/odom";
         }
-        else
-        {
-            odom_subscriber_ = this->create_subscription<nav_msgs::msg::Odometry>("/odom", 10, std::bind(&Safety::drive_callback, this, _1));            
-        }
 
-        // Subscribe to the /scan topic to get LaserScan data
-        laser_subscriber_ = this->create_subscription<sensor_msgs::msg::LaserScan>("/scan", 10, std::bind(&Safety::scan_callback,this, _1));
+        /// TODO: create ROS subscribers and publishers
+        odom_subscription_ = this->create_subscription<nav_msgs::msg::Odometry>(
+            sim_car,
+            10,
+            [this](nav_msgs::msg::Odometry::ConstSharedPtr msg) {
+                this->odom_callback(std::move(msg));
+            });
+        
+        scan_subscription_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
+            "/scan",
+            10,
+            [this](sensor_msgs::msg::LaserScan::ConstSharedPtr msg) {
+                this->scan_callback(msg);
+            });
+        
+        acker_publisher_ = this->create_publisher<ackermann_msgs::msg::AckermannDriveStamped>(
+            "/drive",
+            10);
 
-        // Create a publisher for AckermannDriveStamped messages
-        ackermann_publisher_ = this->create_publisher<ackermann_msgs::msg::AckermannDriveStamped>("/drive", 10);
+        RCLCPP_INFO(this->get_logger(), "SafetyNode initialized.");
     }
 
 private:
-    // Speed variable to store the current speed from odometry
     double speed = 0.0;
+    /// TODO: create ROS subscribers and publishers
 
-    // ROS 2 subscribers and publisher
-    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_subscriber_;
-    rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr laser_subscriber_;
-    rclcpp::Publisher<ackermann_msgs::msg::AckermannDriveStamped>::SharedPtr ackermann_publisher_;
-
-    // Callback for /ego_racecar/odom topic
-    void drive_callback(const nav_msgs::msg::Odometry::ConstSharedPtr msg)
+    void odom_callback(const nav_msgs::msg::Odometry::ConstSharedPtr msg)
     {
-        // get speed
+        /// TODO: update current speed
         speed = msg->twist.twist.linear.x;
+        // RCLCPP_INFO(this->get_logger(), "Current speed: '%f'", speed);
+
     }
 
-    // Callback for /scan topic (LaserScan)
     void scan_callback(const sensor_msgs::msg::LaserScan::ConstSharedPtr scan_msg) 
     {
+        // RCLCPP_INFO(this->get_logger(), "LaserScan received. %s");
+        
         /// TODO: calculate TTC
-        double angle = 0.0;
-        double range_rate = 0.0;
-        double col_time = 0.0;
-        double distance = 0.0;
-        double ttc = this->get_parameter("ttc").as_double();
+        // scan_msg->angle_min = - 108 * scan_msg->angle_increment;
+        // scan_msg->angle_max = 180 * scan_msg->angle_increment;
 
-        //lets put it in a loop that gives us the values in a 20% cone in front of us, ignores nan and inf
-        for(int i = 432; i < 648; i++)
-        {
-            if(std::isinf(scan_msg->ranges[i]) || std::isnan(scan_msg->ranges[i]))
-            {
-                continue;
-            }
-            
-            if(speed == 0.0){continue;}
+        // double angle_min = - 108 * scan_msg->angle_increment;
+        // double angle_max = 180 * scan_msg->angle_increment;
+        int scan_size = scan_msg->ranges.size();
 
-            distance = scan_msg->ranges[i];
-            angle = scan_msg -> angle_min + (i * scan_msg->angle_increment);
-            range_rate = speed * std::cos(angle);
-            // Skip cases where range_rate is negative or zero
-            if (range_rate <= 0.0)
-            {
+
+        for (int i = 0; i < scan_size; i++){
+            if (speed == 0.0){
                 continue;
             }
-            // Skip calculation if range_rate is zero (when the vehicle is not moving) or infinity or nan lol
-            col_time = distance / range_rate;
-            //RCLCPP_INFO(this->get_logger(), "col time %f", col_time);
-            if(col_time < 0 || std::isinf(col_time) || std::isnan(col_time))
-            {
+            if (std::isinf(scan_msg->ranges[i]) || std::isnan(scan_msg->ranges[i]))
                 continue;
-            }
-            if(col_time < ttc)
-            {
-                // publish drive break message here
-                RCLCPP_INFO(this->get_logger(), "Crash Imminent! Brake! %f", col_time);
-                brake_message();
+            double range = scan_msg->ranges[i];
+            double range_rate = speed * std::cos(i * scan_msg->angle_increment);
+
+            double ttc = range / std::max( - range_rate, 0.0);
+            if (ttc < 0 || ttc > 4)
+                continue;
+            if (ttc > 0)
+                RCLCPP_INFO(this->get_logger(), "TTC. %f", ttc);
+            if (ttc < this -> get_parameter("ttc").as_double()){
+                acker_callback();
                 break;
             }
-        }
+            }    
+        /// TODO: publish drive/brake message
     }
 
-    // publish the ackermann message to get the car to stop
-    void brake_message()
-    {
-        // create ackermann msg
-        auto brake_msg = ackermann_msgs::msg::AckermannDriveStamped();
-        // set speed to 0
-        brake_msg.drive.speed = 0.0;
-        // Publish the Ackermann message
-        ackermann_publisher_->publish(brake_msg);
-        RCLCPP_INFO(this->get_logger(), "Brake Message Published");
+    void acker_callback(){
+            auto acker_msg = ackermann_msgs::msg::AckermannDriveStamped();
+            acker_msg.drive.speed = 0.0;
+            acker_publisher_->publish(acker_msg);
+            RCLCPP_INFO(this->get_logger(), "EMERGENCY BRAKE: TTC under threshold");
     }
+
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::ConstSharedPtr odom_subscription_;
+    rclcpp::Subscription<sensor_msgs::msg::LaserScan>::ConstSharedPtr scan_subscription_;
+    rclcpp::Publisher<ackermann_msgs::msg::AckermannDriveStamped>::SharedPtr acker_publisher_;
 };
-
 int main(int argc, char ** argv) {
     rclcpp::init(argc, argv);
     rclcpp::spin(std::make_shared<Safety>());
