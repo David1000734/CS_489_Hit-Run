@@ -25,9 +25,6 @@ public:
             sim_car = "/ego_racecar/odom";      // Sim car
         }
 
-        RCLCPP_INFO(this -> get_logger(),
-            "Currently listening to %s", this -> sim_car.c_str());
-
         // Create publisher
         acker_Publisher_ = this -> create_publisher<ackermann_msgs::msg::AckermannDriveStamped>(
             "/drive",
@@ -47,6 +44,10 @@ public:
             10,
             std::bind(&WallFollow::scan_callback, this, _1)
         );
+
+        RCLCPP_INFO(this -> get_logger(),
+            "Currently listening to %s", this -> sim_car.c_str());
+
     }
 
 private:
@@ -123,6 +124,37 @@ private:
 
     void scan_callback(const sensor_msgs::msg::LaserScan::ConstSharedPtr scan_msg) 
     {
+
+        // First we need to get our 'a' and 'b'
+        // 'a' is the distance (meters) at 90% from the car
+        // 'b' is the distance at 0 to 70 degrees from our car
+        // We will use 45 degrees for now.
+
+        /// To find what value in our range that corresponds to each degree
+        /// we will do the following:
+        /// Length of the array: 1080
+        /// Angle min = -270, Angle max = 270
+        /// Target angle for 90% from car = 270 - 90 = 180
+        /// Thus I need the 180'th degree scan that corresponds to the ranges.
+        /// To find out how much degrees each index in our array represents, we can do this
+        /// 270 + 270 = 540     1080 / 540 = 2
+        /// Each index corresponds to 2 degrees so, 
+        /// 180 * 2 = 360       the 360's scan from the max is our target
+        /// 1080 - 360 = 720
+        ///
+        /// by the same calculation, we can find b
+        /// 90 + 45 = 135       target 135%
+        /// We can follow the same logic as we did for a or
+        /// 45 * 2 = 90         720 - 90 = 630
+
+        // 90% from the car
+        double a = scan_msg -> ranges[720];
+
+        // 135% from the car 
+        double b = scan_msg -> ranges[630];
+
+        double lookahead = 2;
+
         /*
         Callback function for LaserScan messages. Calculate the error and publish the drive message in this function.
 
@@ -132,7 +164,34 @@ private:
         Returns:
             None
         */
-        double error = 0.0; // TODO: replace with error calculated by get_error()
+
+        // We set our degrees for 'a' and 'b' to be 45%
+        double alpha = (a * cos(45) - b) / (a * sin(45));
+        alpha = atan(alpha);
+        ///               (a * cos(45) - b)
+        /// alpha = atan   ____________
+        ///                 (a * sin(45)
+
+        double dt = b * cos(alpha);
+
+        // Project the car accoding to L lookahead
+        // dt_1 = dt + lookahead * sin(alpha)
+        double dt_1 = dt + lookahead * sin(alpha);
+
+        /// DEBUG
+        /*
+        RCLCPP_INFO(this -> get_logger(),
+            "a: %f\tb: %f\nLookahead: %f\talpha: %f",
+            a,
+            b,
+            dt,
+            alpha
+        );
+        */
+
+        // Error is simply desired distance - actual
+        double error = 1 - dt; // TODO: replace with error calculated by get_error()
+
         double velocity = 0.0; // TODO: calculate desired car velocity based on error
         // TODO: actuate the car with PID
 
