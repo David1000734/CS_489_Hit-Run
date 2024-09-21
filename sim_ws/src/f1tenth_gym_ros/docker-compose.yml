@@ -27,7 +27,8 @@ services:
     build: ./
     volumes: 
       - .:/sim_ws/src/f1tenth_gym_ros
-      - /home/momo/Desktop/Code/CS_489/sim_ws/src/safety_node:/sim_ws/src/safety_node
+      - ./../safety_node:/sim_ws/src/safety_node
+      - ./../wall_follow:/sim_ws/src/wall_follow
     environment:
       - DISPLAY=novnc:0.0
     networks:
