@@ -27,6 +27,7 @@ services:
     build: ./
     volumes: 
       - .:/sim_ws/src/f1tenth_gym_ros
+      - ./../../../race_setup.sh:/sim_ws/race_setup.sh:ro
       - ./../safety_node:/sim_ws/src/safety_node
       - ./../wall_follow:/sim_ws/src/wall_follow
     environment:
