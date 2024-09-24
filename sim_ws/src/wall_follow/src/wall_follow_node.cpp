@@ -70,7 +70,7 @@ private:
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_Subscription_;
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_Subscription_;
 
-    double get_range(float* range_data, double angle)
+    double get_range(const std::vector<float> range_data, double angle)
     {
         /*
         Simple helper to return the corresponding range measurement at a given angle. Make sure you take care of NaNs and infs.
@@ -83,8 +83,47 @@ private:
             range: range measurement in meters at the given angle
         */
 
-        // TODO: implement
-        return 0.0;
+        // First ensure that the angle is within our min and max
+        if (angle > 270 || angle < -270) {
+            // throw std::out_of_range("Value cannot be less than the minimum 
+            //                         or greater than the max.")
+
+            return -1;      // Maybe throw range exception...
+        }
+
+        /// To find what value in our range that corresponds to each degree
+        /// we will do the following:
+        /// Length of the array: 1080
+        /// Angle min = -270, Angle max = 270
+        /// Target angle for 90% from car = 270 - 90 = 180
+        /// Thus I need the 180'th degree scan that corresponds to the ranges.
+        /// To find out how much degrees each index in our array represents, we can do this
+        /// 270 + 270 = 540     1080 / 540 = 2
+        /// Each index corresponds to 2 degrees so, 
+        /// 180 * 2 = 360       the 360's scan from the max is our target
+        /// 1080 - 360 = 720
+        ///
+        /// by the same calculation, we can find b
+        /// 90 + 45 = 135       target 135%
+        /// We can follow the same logic as we did for a or
+        /// 45 * 2 = 90         720 - 90 = 630
+
+        // Find length of the array
+        int arr_length = range_data.size();
+
+        // Recall our angle min and max is -270% and 270%
+        double max_angle = 270;
+
+        // Find how much degrees we should move
+        // from max or min to get to target angle
+        if (angle < 0) {
+            // Is negative
+            max_angle *= -1;        // Negate the angle
+            arr_length = 0;         // We will use that new angle for negative values
+        }
+
+        // 1080 / (270 * 2) = 2,    We know every index is 2 degrees.
+        return (arr_length - ((max_angle - angle) * 2));
     }
 
     double get_error(float* range_data, double dist)
@@ -129,29 +168,23 @@ private:
         // 'a' is the distance (meters) at 90% from the car
         // 'b' is the distance at 0 to 70 degrees from our car
         // We will use 45 degrees for now.
-
-        /// To find what value in our range that corresponds to each degree
-        /// we will do the following:
-        /// Length of the array: 1080
-        /// Angle min = -270, Angle max = 270
-        /// Target angle for 90% from car = 270 - 90 = 180
-        /// Thus I need the 180'th degree scan that corresponds to the ranges.
-        /// To find out how much degrees each index in our array represents, we can do this
-        /// 270 + 270 = 540     1080 / 540 = 2
-        /// Each index corresponds to 2 degrees so, 
-        /// 180 * 2 = 360       the 360's scan from the max is our target
-        /// 1080 - 360 = 720
-        ///
-        /// by the same calculation, we can find b
-        /// 90 + 45 = 135       target 135%
-        /// We can follow the same logic as we did for a or
-        /// 45 * 2 = 90         720 - 90 = 630
+        //
+        // We can use the function to do calculations every time,
+        // or we can just hard code the static value.
+        // Explanation for the numbers are in the get_range().
 
         // 90% from the car
         double a = scan_msg -> ranges[720];
 
         // 135% from the car 
         double b = scan_msg -> ranges[630];
+
+        // DEBUG
+        // RCLCPP_INFO(this -> get_logger(),
+        //     "a: %f\tb: %f\n",
+        //     get_range(scan_msg -> ranges, 90),
+        //     get_range(scan_msg -> ranges, 45)
+        // );
 
         double lookahead = 2;
 
