@@ -122,39 +122,42 @@ private:
         return range_data[angle];
     }
 
-    void pid_control()
+    void pid_control(const std::vector<float> range_data)
     {
-        ackermann_msgs::msg::AckermannDriveStamped drive_msg = ackermann_msgs::msg::AckermannDriveStamped();
-        double p = this->get_parameter("p").as_double();
-        double i = this->get_parameter("i").as_double();
-        double d = this->get_parameter("d").as_double();
+        ackermann_msgs::msg::AckermannDriveStamped acker_message = ackermann_msgs::msg::AckermannDriveStamped();
+        // double p = this->get_parameter("P").as_double();
+        // double i = this->get_parameter("I").as_double();
+        // double d = this->get_parameter("D").as_double();
         double steering_angle = 0.0;
 
-            /*
-            Based on the calculated error, publish vehicle control
-            Args:
-                error: calculated error
-                velocity: desired velocity
-            Returns:
-                None
-            */
-            double angle = 0.0;
-        // if speed is 0, don't calculate values
-        if (speed == 0)
-        {
-            continue;
-        }
+        /*
+        Based on the calculated error, publish vehicle control
+        Args:
+            error: calculated error
+            velocity: desired velocity
+        Returns:
+            None
+        */
+        double angle = 0.0;
+
         // TODO: Use kp, ki & kd to implement a PID controller
-        double kp = porportional_Component();
+        double kp = porportional_Component(range_data);
         double ki = integral_Component();
-        double kd = error / prev_error;
+        double kd = this -> error / prev_error;
 
         // Derivitive component
         prev_error = error;
 
-        // double kd = Derivative_Component();
+        // double kd = Derivative_Component(this -> error);
 
-        steering_angle = (p * kp) + (i * ki) + (d * kd);
+        RCLCPP_INFO(this -> get_logger(),
+            "p: %f\ti: %f\td: %f\n",
+            this->get_parameter("P").as_double(),
+            this->get_parameter("I").as_double(),
+            this->get_parameter("D").as_double()
+        );
+
+        steering_angle = (this->get_parameter("P").as_double() * kp) + (this->get_parameter("I").as_double() * ki) + (this->get_parameter("D").as_double() * kd);
 
         // TODO: fill in drive message and publish
         // If the steering angle is between 0 degrees and 10 degrees, the car should drive at 1.5 meters per second.
@@ -172,20 +175,19 @@ private:
             acker_message.drive.speed = 0.5;
         }
 
+        acker_message.drive.steering_angle = steering_angle;
         acker_Publisher_ -> publish(acker_message);
     }
 
     void scan_callback(const sensor_msgs::msg::LaserScan::ConstSharedPtr scan_msg)
     {
-        ackermann_msgs::msg::AckermannDriveStamped acker_message = ackermann_msgs::msg::AckermannDriveStamped();
-
         // Error is simply desired distance - actual
         //double derivative = (dt + dt_1) / 1
 
         //double velocity = 1.5; // TODO: calculate desired car velocity based on error
         // TODO: actuate the car with PID
 
-        pid_control();
+        pid_control(scan_msg -> ranges);
     }
 
     double integral_Component()
@@ -221,7 +223,7 @@ private:
         return integral;
     }
 
-    double porportional_Component()
+    double porportional_Component(const std::vector<float> range_data)
     {
         /// DEBUG
         /*
@@ -233,6 +235,7 @@ private:
             alpha
         );
         */
+        double lookahead = 2;
 
         double a = range_data[630];
 
@@ -246,7 +249,6 @@ private:
         //     get_range(range_data, 45)
         // );
 
-        double lookahead = 2;
 
         // We set our degrees for 'a' and 'b' to be 45%
         double alpha = (a * cos(45) - b) / (a * sin(45));
@@ -258,15 +260,16 @@ private:
         double dt = b * cos(alpha);
 
         // Future distance
-        this->dt_1 = distance + lookahead * sin(alpha);
-        this->error = 1 - dt;
+        this -> dt_1 = dt + lookahead * sin(alpha);
+        this -> error = 1 - dt;
 
         return this->error;
     }
 
     double derivativeFunc(double error)
     {
-
+        double current_derivative = 0.0;
+        double derivative = 0.0;
         int max_range = 100; // Max # of values for integral is 100
 
         if (derivative_counter < max_range)
@@ -278,16 +281,15 @@ private:
                 return 0.0;
 
             // slope of most current two points ONLY
-            current_derivative = (derivative_vector.back() - derivative_vector[derivative.size() - 2])
+            current_derivative = (derivative_vector.back() - derivative_vector[derivative_vector.size() - 2]);
 
-                // if there is only two points, return the current derivative
+            // if there is only two points, return the current derivative
             if (derivative_vector.size() == 2){
-                derivaitve = current_derivative;
-                return derivative;
+                return current_derivative;
             }
 
             // if there is more than two points, average derivatives.
-            derivative = (derivative + current_derivative) / 2
+            derivative = (derivative + current_derivative) / 2;
 
             derivative_counter++;
             return derivative;
