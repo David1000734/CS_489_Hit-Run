@@ -48,6 +48,7 @@ public:
     }
 
 private:
+    const double PI = 3.1415926535;
     // PID CONTROL PARAMS
     // TODO: double kp =
     // TODO: double kd =
@@ -174,7 +175,7 @@ private:
         // DEBUG
         RCLCPP_INFO(this -> get_logger(), "Steering Angle: %f\n", steering_angle);
 
-        acker_message.drive.steering_angle = steering_angle;
+        acker_message.drive.steering_angle = degree_to_radian(steering_angle);
         acker_Publisher_ -> publish(acker_message);
     }
 
@@ -331,6 +332,11 @@ private:
         // msg -> twist.twist.linear.z);
 
         this -> curr_speed = msg -> twist.twist.linear.x;
+    }
+
+    double degree_to_radian(double degrees) {
+        // Helper function, change degrees to radian.
+        return (degrees * (PI / 180));
     }
 };
 int main(int argc, char **argv)
