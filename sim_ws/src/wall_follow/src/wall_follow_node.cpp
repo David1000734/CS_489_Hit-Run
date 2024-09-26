@@ -8,7 +8,6 @@ using std::placeholders::_1;
 
 class WallFollow : public rclcpp::Node
 {
-
 public:
     WallFollow() : Node("wall_follow_node")
     {
@@ -53,7 +52,7 @@ private:
     // TODO: double kp =
     // TODO: double kd =
     // TODO: double ki =
-    double servo_offset = 0.0;
+    double curr_speed = 0.0;
     double prev_error = 0.0;
     double error = 0.0;
     double integral = 0.0; // Running sum of errors
@@ -119,15 +118,17 @@ private:
             max_angle *= -1; // Negate the angle
             arr_length = 0;  // We will use that new angle for negative values
         }
-        return range_data[angle];
+
+        // 1080 / (270 * 2) = 2,  We know every index is 2 degrees.
+        return (arr_length - ((max_angle - angle) * 2));
     }
 
     void pid_control(const std::vector<float> range_data)
     {
         ackermann_msgs::msg::AckermannDriveStamped acker_message = ackermann_msgs::msg::AckermannDriveStamped();
-        // double p = this->get_parameter("P").as_double();
-        // double i = this->get_parameter("I").as_double();
-        // double d = this->get_parameter("D").as_double();
+        double p = this->get_parameter("P").as_double();
+        double i = this->get_parameter("I").as_double();
+        double d = this->get_parameter("D").as_double();
         double steering_angle = 0.0;
 
         /*
@@ -138,26 +139,21 @@ private:
         Returns:
             None
         */
-        double angle = 0.0;
 
         // TODO: Use kp, ki & kd to implement a PID controller
         double kp = porportional_Component(range_data);
         double ki = integral_Component();
-        double kd = this -> error / prev_error;
+        double kd = derivative_Component();
 
-        // Derivitive component
-        prev_error = error;
+        steering_angle = (p * kp) + (i * ki) + (d * kd);
 
-        // double kd = Derivative_Component(this -> error);
-
+        // DEBUG
         RCLCPP_INFO(this -> get_logger(),
             "p: %f\ti: %f\td: %f\n",
-            this->get_parameter("P").as_double(),
-            this->get_parameter("I").as_double(),
-            this->get_parameter("D").as_double()
+            kp,
+            ki,
+            kd
         );
-
-        steering_angle = (this->get_parameter("P").as_double() * kp) + (this->get_parameter("I").as_double() * ki) + (this->get_parameter("D").as_double() * kd);
 
         // TODO: fill in drive message and publish
         // If the steering angle is between 0 degrees and 10 degrees, the car should drive at 1.5 meters per second.
@@ -175,19 +171,36 @@ private:
             acker_message.drive.speed = 0.5;
         }
 
+        // DEBUG
+        RCLCPP_INFO(this -> get_logger(), "Steering Angle: %f\n", steering_angle);
+
         acker_message.drive.steering_angle = steering_angle;
         acker_Publisher_ -> publish(acker_message);
     }
 
     void scan_callback(const sensor_msgs::msg::LaserScan::ConstSharedPtr scan_msg)
     {
-        // Error is simply desired distance - actual
-        //double derivative = (dt + dt_1) / 1
+        ackermann_msgs::msg::AckermannDriveStamped acker_message = ackermann_msgs::msg::AckermannDriveStamped();
 
-        //double velocity = 1.5; // TODO: calculate desired car velocity based on error
+        // Error is simply desired distance - actual
+
+        //double velocity = 0.0; // TODO: calculate desired car velocity based on error
         // TODO: actuate the car with PID
 
-        pid_control(scan_msg -> ranges);
+        // Don't increment integral if the car isn't moving
+        if (curr_speed > 0.0001) {
+            // ackermann_msgs::msg::AckermannDriveStamped acker_message = ackermann_msgs::msg::AckermannDriveStamped();
+
+            // // Might as well stop the car
+            // acker_message.drive.speed = 0;
+            // acker_Publisher_ -> publish(acker_message);
+
+            pid_control(scan_msg -> ranges);
+        } else {
+            // Let the car drive from start
+            acker_message.drive.speed = 2.0;
+            acker_Publisher_ -> publish(acker_message);
+        }
     }
 
     double integral_Component()
@@ -266,19 +279,18 @@ private:
         return this->error;
     }
 
-    double derivativeFunc(double error)
-    {
+    double derivative_Component() {
         double current_derivative = 0.0;
         double derivative = 0.0;
         int max_range = 100; // Max # of values for integral is 100
 
         if (derivative_counter < max_range)
         {
-
-            derivative_vector.push_back(error);
+            derivative_vector.push_back(this -> error);
             // derivative of one point
-            if (derivative_vector.size() == 1)
+            if (derivative_vector.size() == 1) {
                 return 0.0;
+            }
 
             // slope of most current two points ONLY
             current_derivative = (derivative_vector.back() - derivative_vector[derivative_vector.size() - 2]);
@@ -292,10 +304,7 @@ private:
             derivative = (derivative + current_derivative) / 2;
 
             derivative_counter++;
-            return derivative;
-        }
-        else
-        {
+        } else {
             // Counter is more than max, minus counter and a add new error
             derivative -= (derivative_vector[1] - derivative_vector[0]);
 
@@ -303,13 +312,15 @@ private:
             derivative_vector.erase(derivative_vector.begin());
 
             // Push new value onto the array
-            derivative_vector.push_back(error);
+            derivative_vector.push_back(this -> error);
 
             // Add new error onto vector
-            integral += error;
+            derivative += this -> error;
 
             // No need to increment counter anymore
         }
+
+        return derivative;
     }
 
     void odom_callback(const nav_msgs::msg::Odometry::ConstSharedPtr msg)
@@ -318,6 +329,8 @@ private:
         // msg -> twist.twist.linear.x,
         // msg -> twist.twist.linear.y,
         // msg -> twist.twist.linear.z);
+
+        this -> curr_speed = msg -> twist.twist.linear.x;
     }
 };
 int main(int argc, char **argv)
