@@ -19,6 +19,17 @@ public:
         this->declare_parameter("I", 0.0);
         this->declare_parameter("D", 0.0);
         this->declare_parameter("mode", "sim");
+        std::string sim_car = "/odom"; // Physical car
+
+        /// Physical Car: 
+        /// P: 0.5
+        /// I: 0.01
+        /// D: 0.13
+
+        /// Simulation Car:
+        /// P: 3.5
+        /// I: 0.01
+        /// D: 0.09
 
         // Set the topic for sim or physical car
         if (this->get_parameter("mode").as_string() == "sim")
@@ -44,7 +55,7 @@ public:
             std::bind(&WallFollow::scan_callback, this, _1));
 
         RCLCPP_INFO(this->get_logger(),
-                    "Currently listening to %s", this->sim_car.c_str());
+                    "Currently listening to %s", sim_car.c_str());
     }
 
 private:
@@ -69,7 +80,6 @@ private:
     // Topics
     std::string lidarscan_topic = "/scan";
     std::string drive_topic = "/drive";
-    std::string sim_car = "/odom"; // Physical car
 
     /// TODO: create ROS subscribers and publishers
     rclcpp::Publisher<ackermann_msgs::msg::AckermannDriveStamped>::SharedPtr acker_Publisher_;
