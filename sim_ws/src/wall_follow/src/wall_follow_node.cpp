@@ -59,6 +59,7 @@ private:
     double integral = 0.0; // Running sum of errors
     double derivative = 0.0;
     double dt_1 = 0.0;
+    double previous_angle = 0.0;
 
     std::vector<float> integral_Vector;
     std::vector<float> derivative_vector;
@@ -131,7 +132,6 @@ private:
         double i = this->get_parameter("I").as_double();
         double d = this->get_parameter("D").as_double();
         double steering_angle = 0.0;
-
         /*
         Based on the calculated error, publish vehicle control
         Args:
@@ -144,10 +144,32 @@ private:
         // TODO: Use kp, ki & kd to implement a PID controller
         double kp = porportional_Component(range_data);
         double ki = integral_Component();
-        double kd = derivative_Component();
+        double kd = der_component();
 
         steering_angle = (p * kp) + (i * ki) + (d * kd);
+        
+        // Same as before
+        if (previous_angle == 0.0) {
+        steering_angle = ((p * kp) + (kd * d));
+        
+        } else {
+        steering_angle = previous_angle - ((p * kp) + (kd * d));
+        }
 
+        // steering_angle = previous_angle
+
+        // // 90% from car
+        // double a = range_data[630];
+
+        // // 135% from the car
+        // double b = range_data[710];
+
+        // // We set our degrees for 'a' and 'b' to be 45%
+        // double alpha = (a * cos(degree_to_radian(45)) - b) /
+        //                 (a * sin(degree_to_radian(45)));
+
+        // steering_angle = p * (-(b * cos(alpha)) - 2* sin (alpha) ) + (d * kd);
+ 
         // DEBUG
         RCLCPP_INFO(this -> get_logger(),
             "p: %f\ti: %f\td: %f\n",
@@ -160,11 +182,12 @@ private:
         // If the steering angle is between 0 degrees and 10 degrees, the car should drive at 1.5 meters per second.
         // If the steering angle is between 10 degrees and 20 degrees, the speed should be 1.0 meters per second.
         // Otherwise, the speed should be 0.5 meters per second.
-        if (steering_angle > -0.0001 && steering_angle < 10.0001){
+        if (steering_angle > degree_to_radian(-10.0001) && steering_angle < degree_to_radian(10.0001)){
             acker_message.drive.speed = 1.5;
 
         // If less than 20 and greater than 10
-        } else if (steering_angle > 9.999 && steering_angle < 20.001) {
+        } else if ((steering_angle > degree_to_radian(9.999) && steering_angle < degree_to_radian(20.0001)) ||
+                   (steering_angle > -10.0001 && steering_angle < -20.0001)) {
             acker_message.drive.speed = 1.0;
         
         // Any other steering angle, speed is 0.5
@@ -172,10 +195,12 @@ private:
             acker_message.drive.speed = 0.5;
         }
 
+        steering_angle *= -1;
+        acker_message.drive.steering_angle = steering_angle;
+
         // DEBUG
         RCLCPP_INFO(this -> get_logger(), "Steering Angle: %f\n", steering_angle);
 
-        acker_message.drive.steering_angle = degree_to_radian(steering_angle);
         acker_Publisher_ -> publish(acker_message);
     }
 
@@ -204,17 +229,69 @@ private:
         }
     }
 
+    double porportional_Component(const std::vector<float> range_data)
+    {
+        double lookahead = 2.0;
+
+        // 90% from car
+        double a = range_data[630];
+
+        // 135% from the car
+        double b = range_data[710];
+
+
+
+        // DEBUG
+        // RCLCPP_INFO(this -> get_logger(),
+        //     "a: %f\tb: %f\n",
+        //     get_range(range_data, 90),
+        //     get_range(range_data, 45)
+        // );
+
+        // We set our degrees for 'a' and 'b' to be 45%
+        double alpha = (a * cos(degree_to_radian(45)) - b) /
+                        (a * sin(degree_to_radian(45)));
+        alpha = atan(alpha);
+        ///               (a * cos(45) - b)
+        /// alpha = atan   ____________
+        ///                 (a * sin(45)
+
+        double dt = b * cos(alpha);
+
+        // Future distance
+        this -> prev_error = this -> error;     // Previous error
+
+
+        this -> dt_1 = dt + lookahead * sin(alpha); // Lsin(theta)
+
+        // this -> error = 1.0 - dt_1;
+
+        this -> error = 1.0 - dt_1;
+
+        /// DEBUG
+        // RCLCPP_INFO(this -> get_logger(),
+        //     "a: %f\tb: %f\nLookahead: %f\talpha: %f\terror: %f\n",
+        //     a,
+        //     b,
+        //     dt,
+        //     alpha,
+        //     this -> error
+        // );
+
+        return this -> error;
+    }
+
     double integral_Component()
     {
-        int max_range = 100; // Max # of values for integral is 100
+        int max_range = 2; // Max # of values for integral is 100
 
         if (integral_counter < max_range)
         {
             // Add to array
-            integral_Vector.push_back(error);
+            integral_Vector.push_back(this -> error);
 
             // Counter is less than max, just add to it
-            integral += error;
+            integral += this -> error;
             integral_counter++;
         }
         else
@@ -226,10 +303,10 @@ private:
             integral_Vector.erase(integral_Vector.begin());
 
             // Push new value onto the array
-            integral_Vector.push_back(error);
+            integral_Vector.push_back(this -> error);
 
             // Add new error onto vector
-            integral += error;
+            integral += this -> error;
 
             // No need to increment counter anymore
         }
@@ -237,91 +314,14 @@ private:
         return integral;
     }
 
-    double porportional_Component(const std::vector<float> range_data)
-    {
-        /// DEBUG
-        /*
-        RCLCPP_INFO(this -> get_logger(),
-            "a: %f\tb: %f\nLookahead: %f\talpha: %f",
-            a,
-            b,
-            dt,
-            alpha
-        );
-        */
-        double lookahead = 2;
+    double der_component() {
+        int max_range = 10;
 
-        double a = range_data[630];
-
-        // 135% from the car
-        double b = range_data[710];
-
-        // DEBUG
-        // RCLCPP_INFO(this -> get_logger(),
-        //     "a: %f\tb: %f\n",
-        //     get_range(range_data, 90),
-        //     get_range(range_data, 45)
-        // );
-
-
-        // We set our degrees for 'a' and 'b' to be 45%
-        double alpha = (a * cos(45) - b) / (a * sin(45));
-        alpha = atan(alpha);
-        ///               (a * cos(45) - b)
-        /// alpha = atan   ____________
-        ///                 (a * sin(45)
-
-        double dt = b * cos(alpha);
-
-        // Future distance
-        this -> dt_1 = dt + lookahead * sin(alpha);
-        this -> error = 1 - dt;
-
-        return this->error;
-    }
-
-    double derivative_Component() {
-        double current_derivative = 0.0;
-        double derivative = 0.0;
-        int max_range = 100; // Max # of values for integral is 100
-
-        if (derivative_counter < max_range)
-        {
-            derivative_vector.push_back(this -> error);
-            // derivative of one point
-            if (derivative_vector.size() == 1) {
-                return 0.0;
-            }
-
-            // slope of most current two points ONLY
-            current_derivative = (derivative_vector.back() - derivative_vector[derivative_vector.size() - 2]);
-
-            // if there is only two points, return the current derivative
-            if (derivative_vector.size() == 2){
-                return current_derivative;
-            }
-
-            // if there is more than two points, average derivatives.
-            derivative = (derivative + current_derivative) / 2;
-
-            derivative_counter++;
-        } else {
-            // Counter is more than max, minus counter and a add new error
-            derivative -= (derivative_vector[1] - derivative_vector[0]);
-
-            // Pop the first element from the vector
-            derivative_vector.erase(derivative_vector.begin());
-
-            // Push new value onto the array
-            derivative_vector.push_back(this -> error);
-
-            // Add new error onto vector
-            derivative += this -> error;
-
-            // No need to increment counter anymore
+        if (this -> prev_error == 0) {
+            return 0.0;
         }
 
-        return derivative;
+        return (this -> error + this -> prev_error / 2);
     }
 
     void odom_callback(const nav_msgs::msg::Odometry::ConstSharedPtr msg)
