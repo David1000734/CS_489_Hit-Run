@@ -147,36 +147,14 @@ private:
         double kd = der_component();
 
         steering_angle = (p * kp) + (i * ki) + (d * kd);
-        
-        // Same as before
-        // if (previous_angle == 0.0) {
-        // steering_angle = ((p * kp) + (kd * d));
-        
-        // } else {
-        // steering_angle = previous_angle - ((p * kp) + (kd * d));
-        // }
 
-        // steering_angle = previous_angle
-
-        // // 90% from car
-        // double a = range_data[630];
-
-        // // 135% from the car
-        // double b = range_data[710];
-
-        // // We set our degrees for 'a' and 'b' to be 45%
-        // double alpha = (a * cos(degree_to_radian(45)) - b) /
-        //                 (a * sin(degree_to_radian(45)));
-
-        // steering_angle = p * (-(b * cos(alpha)) - 2* sin (alpha) ) + (d * kd);
- 
         // DEBUG
-        RCLCPP_INFO(this -> get_logger(),
-            "p: %f\ti: %f\td: %f\n",
-            kp,
-            ki,
-            kd
-        );
+        // RCLCPP_INFO(this -> get_logger(),
+        //     "p: %f\ti: %f\td: %f\n",
+        //     p * kp,
+        //     i * ki,
+        //     d * kd
+        // );
 
         // TODO: fill in drive message and publish
         // If the steering angle is between 0 degrees and 10 degrees, the car should drive at 1.5 meters per second.
@@ -195,11 +173,13 @@ private:
             acker_message.drive.speed = 0.5;
         }
 
+        // RCLCPP_INFO(this -> get_logger(), "Speed: %f\n", acker_message.drive.speed);
+
         steering_angle *= -1;
         acker_message.drive.steering_angle = steering_angle;
 
         // DEBUG
-        RCLCPP_INFO(this -> get_logger(), "Steering Angle: %f\n", steering_angle);
+        // RCLCPP_INFO(this -> get_logger(), "Steering Angle: %f\n", steering_angle);
 
         acker_Publisher_ -> publish(acker_message);
     }
@@ -213,33 +193,18 @@ private:
         //double velocity = 0.0; // TODO: calculate desired car velocity based on error
         // TODO: actuate the car with PID
 
-        // Don't increment integral if the car isn't moving
-        if (curr_speed > 0.0001) {
-            // ackermann_msgs::msg::AckermannDriveStamped acker_message = ackermann_msgs::msg::AckermannDriveStamped();
-
-            // // Might as well stop the car
-            // acker_message.drive.speed = 0;
-            // acker_Publisher_ -> publish(acker_message);
-
-            pid_control(scan_msg -> ranges);
-        } else {
-            // Let the car drive from start
-            acker_message.drive.speed = 2.0;
-            acker_Publisher_ -> publish(acker_message);
-        }
+        pid_control(scan_msg -> ranges);
     }
 
     double porportional_Component(const std::vector<float> range_data)
     {
-        double lookahead = 2.0;
+        double lookahead = 1;
 
         // 90% from car
         double a = range_data[630];
 
         // 135% from the car
         double b = range_data[710];
-
-
 
         // DEBUG
         // RCLCPP_INFO(this -> get_logger(),
@@ -264,9 +229,7 @@ private:
 
         this -> dt_1 = dt + lookahead * sin(alpha); // Lsin(theta)
 
-        // this -> error = 1.0 - dt_1;
-
-        this -> error = 1.0 - dt_1;
+        this -> error = 1.5 - dt_1;
 
         /// DEBUG
         // RCLCPP_INFO(this -> get_logger(),
@@ -283,7 +246,7 @@ private:
 
     double integral_Component()
     {
-        int max_range = 2; // Max # of values for integral is 100
+        int max_range = 50; // Max # of values for integral is 100
 
         if (integral_counter < max_range)
         {
@@ -315,13 +278,14 @@ private:
     }
 
     double der_component() {
-        int max_range = 10;
+        // int max_range = 10;
 
         if (this -> prev_error == 0) {
             return 0.0;
         }
 
-        return ((this -> error + this -> prev_error) / 2);
+        // return ((this -> error + this -> prev_error) / 2);
+        return (this -> prev_error - this -> error);
     }
 
     void odom_callback(const nav_msgs::msg::Odometry::ConstSharedPtr msg)
