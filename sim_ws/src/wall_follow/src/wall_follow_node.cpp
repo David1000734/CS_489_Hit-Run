@@ -149,12 +149,12 @@ private:
         steering_angle = (p * kp) + (i * ki) + (d * kd);
         
         // Same as before
-        if (previous_angle == 0.0) {
-        steering_angle = ((p * kp) + (kd * d));
+        // if (previous_angle == 0.0) {
+        // steering_angle = ((p * kp) + (kd * d));
         
-        } else {
-        steering_angle = previous_angle - ((p * kp) + (kd * d));
-        }
+        // } else {
+        // steering_angle = previous_angle - ((p * kp) + (kd * d));
+        // }
 
         // steering_angle = previous_angle
 
@@ -321,7 +321,7 @@ private:
             return 0.0;
         }
 
-        return (this -> error + this -> prev_error / 2);
+        return ((this -> error + this -> prev_error) / 2);
     }
 
     void odom_callback(const nav_msgs::msg::Odometry::ConstSharedPtr msg)
