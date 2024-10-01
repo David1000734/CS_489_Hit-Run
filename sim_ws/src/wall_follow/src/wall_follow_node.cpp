@@ -22,7 +22,7 @@ public:
         std::string sim_car = "/odom"; // Physical car
 
         /// Physical Car: 
-        /// P: 0.5
+        /// P: 1.2
         /// I: 0.01
         /// D: 0.13
 
@@ -64,7 +64,6 @@ private:
     // TODO: double kp =
     // TODO: double kd =
     // TODO: double ki =
-    double curr_speed = 0.0;
     double prev_error = 0.0;
     double error = 0.0;
     double integral = 0.0; // Running sum of errors
@@ -141,6 +140,7 @@ private:
         double p = this->get_parameter("P").as_double();
         double i = this->get_parameter("I").as_double();
         double d = this->get_parameter("D").as_double();
+        double speed = this->get_parameter("speed").as_double();
         double steering_angle = 0.0;
         /*
         Based on the calculated error, publish vehicle control
@@ -171,18 +171,17 @@ private:
         // If the steering angle is between 10 degrees and 20 degrees, the speed should be 1.0 meters per second.
         // Otherwise, the speed should be 0.5 meters per second.
         if (steering_angle > degree_to_radian(-10.0001) && steering_angle < degree_to_radian(10.0001)){
-            acker_message.drive.speed = 1.5;
+            acker_message.drive.speed = 1.5 * speed;
 
         // If less than 20 and greater than 10
         } else if ((steering_angle > degree_to_radian(9.999) && steering_angle < degree_to_radian(20.0001)) ||
                    (steering_angle > -10.0001 && steering_angle < -20.0001)) {
-            acker_message.drive.speed = 1.0;
+            acker_message.drive.speed = 1.0 * speed;
         
         // Any other steering angle, speed is 0.5
         } else {
-            acker_message.drive.speed = 0.5;
+            acker_message.drive.speed = 0.5 * speed;
         }
-
         // RCLCPP_INFO(this -> get_logger(), "Speed: %f\n", acker_message.drive.speed);
 
         steering_angle *= -1;
@@ -296,16 +295,6 @@ private:
 
         // return ((this -> error + this -> prev_error) / 2);
         return (this -> prev_error - this -> error);
-    }
-
-    void odom_callback(const nav_msgs::msg::Odometry::ConstSharedPtr msg)
-    {
-        // RCLCPP_INFO(this -> get_logger(), "Odom Reading X: %f\tY: %f\tZ: %f.",
-        // msg -> twist.twist.linear.x,
-        // msg -> twist.twist.linear.y,
-        // msg -> twist.twist.linear.z);
-
-        this -> curr_speed = msg -> twist.twist.linear.x;
     }
 
     double degree_to_radian(double degrees) {
