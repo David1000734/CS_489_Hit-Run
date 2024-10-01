@@ -209,12 +209,17 @@ private:
     double porportional_Component(const std::vector<float> range_data)
     {
         double lookahead = 1;
+        int wall = 90; //degrees
+        int angle_difference = 60; //angle_differnce = theta
+        //wall + angle_difference = the angle the lidar is actually pointing forward at
+        int angle90 = get_range(range_data, wall);
+        int anglePlus = get_range(range_data, wall + angle_difference);
 
         // 90% from car
-        double a = range_data[630];
+        double a = range_data[angle90];
 
         // 135% from the car
-        double b = range_data[710];
+        double b = range_data[anglePlus];
 
         // DEBUG
         // RCLCPP_INFO(this -> get_logger(),
@@ -224,8 +229,8 @@ private:
         // );
 
         // We set our degrees for 'a' and 'b' to be 45%
-        double alpha = (a * cos(degree_to_radian(45)) - b) /
-                        (a * sin(degree_to_radian(45)));
+        double alpha = (a * cos(degree_to_radian(angle_difference)) - b) /
+                        (a * sin(degree_to_radian(angle_difference)));
         alpha = atan(alpha);
         ///               (a * cos(45) - b)
         /// alpha = atan   ____________
@@ -236,10 +241,9 @@ private:
         // Future distance
         this -> prev_error = this -> error;     // Previous error
 
-
         this -> dt_1 = dt + lookahead * sin(alpha); // Lsin(theta)
 
-        this -> error = 1.5 - dt_1;
+        this -> error = 0.6 - dt_1;
 
         /// DEBUG
         // RCLCPP_INFO(this -> get_logger(),
