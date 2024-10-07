@@ -171,16 +171,16 @@ private:
         // If the steering angle is between 10 degrees and 20 degrees, the speed should be 1.0 meters per second.
         // Otherwise, the speed should be 0.5 meters per second.
         if (steering_angle > degree_to_radian(-10.0001) && steering_angle < degree_to_radian(10.0001)){
-            acker_message.drive.speed = 1.5 * speed;
+            acker_message.drive.speed = speed;
 
         // If less than 20 and greater than 10
         } else if ((steering_angle > degree_to_radian(9.999) && steering_angle < degree_to_radian(20.0001)) ||
                    (steering_angle > -10.0001 && steering_angle < -20.0001)) {
-            acker_message.drive.speed = 1.0 * speed;
+            acker_message.drive.speed = 1.0;
         
         // Any other steering angle, speed is 0.5
         } else {
-            acker_message.drive.speed = 0.5 * speed;
+            acker_message.drive.speed = 0.5;
         }
         // RCLCPP_INFO(this -> get_logger(), "Speed: %f\n", acker_message.drive.speed);
 
