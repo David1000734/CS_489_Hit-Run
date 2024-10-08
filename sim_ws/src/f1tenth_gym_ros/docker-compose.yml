@@ -30,6 +30,7 @@ services:
       - ./../../../race_setup.sh:/sim_ws/race_setup.sh:ro
       - ./../safety_node:/sim_ws/src/safety_node
       - ./../wall_follow:/sim_ws/src/wall_follow
+      - ./../gap_follow:/sim_ws/src/gap_follow
     environment:
       - DISPLAY=novnc:0.0
     networks:
