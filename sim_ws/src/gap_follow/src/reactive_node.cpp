@@ -1,6 +1,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include <string>
 #include <vector>
+#include <map>
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "ackermann_msgs/msg/ackermann_drive_stamped.hpp"
@@ -17,6 +18,8 @@ public:
         this -> declare_parameter("mode", "sim");
         this -> declare_parameter("bubble", 0.0);
         this -> declare_parameter("speed", 0.0);
+        this -> declare_parameter("gap", 4);
+        this -> declare_parameter("dist", 5.0);
         std::string sim_car = "/odom";      // Physical Car
 
         if (this -> get_parameter("mode").as_string() == "sim") {
@@ -52,12 +55,15 @@ private:
     rclcpp::Publisher<ackermann_msgs::msg::AckermannDriveStamped>::SharedPtr acker_Publisher_;
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_Subscription_;
 
-    void preprocess_lidar(float* ranges)
-    {   
+    vector<double> preprocess_lidar(vector<double> ranges)
+    {
+        vector<double> temp = null;
         // Preprocess the LiDAR scan array. Expert implementation includes:
         // 1.Setting each value to the mean over some window
+        
         // 2.Rejecting high values (eg. > 3m)
-        return;
+
+        return ranges;
     }
 
     void find_max_gap(float* ranges, int* indice)
@@ -77,6 +83,8 @@ private:
 
     void lidar_callback(const sensor_msgs::msg::LaserScan::ConstSharedPtr scan_msg) 
     {
+        double distance_threshold = this -> get_parameter("dist").as_double();
+        int gap_size = this -> get_parameter("gap").as_int();
         /*
         RCLCPP_INFO(
             this -> get_logger(), 
@@ -87,10 +95,80 @@ private:
         );
         */
 
+        std::vector<float> range_data = preprocess_lidar(scan_msg -> ranges);
+        std::map<int, double> largest_gap;      // Global Scope
+        std::map<int, double> temp_gap;         // Local Scope
+
+        for (int i = 0; i < range_data.size(); i++) {
+            // Check the curent point, if it meets our requirements, do stuff
+            if (range_data[i] > distance_threshold) {
+                // Store current gap into temp
+                temp_gap[i] = range_data[i];
+
+            // Check if gap is larger than current largest_gap
+            } else if (temp_gap.size() > gap_size - 1) {
+                // Temp gap meets the size and distance requirements
+
+                // Is it larger than the current largest?
+                if (temp_gap.size() > largest_gap.size()){
+                    largest_gap = temp_gap;
+                    // swap(temp_gap, largest_gap);
+                }
+                // Gap is smaller or new largest determined, clear temp
+
+                temp_gap.clear();
+            } else {
+                // Does not meet distance and size requirements
+                temp_gap.clear();
+            }
+        }
+
+        //largest gap
+        for (auto index : largest_gap){
+            RCLCPP_INFO(this -> get_logger(),
+            "\nTemp-Idx: %i\tTemp-Value: %f.\n",
+            index.first,
+            index.second);
+        }
+        
         // Process each LiDAR scan as per the Follow Gap algorithm & publish an AckermannDriveStamped Message
 
         /// TODO:
         // Find closest point to LiDAR
+
+        //double scan by billy
+        /*
+        unordered_set<int, int> gap_size_hashmap;
+        int startindex = 0;
+        int endIndex = 0;
+        int gap_size = 0;
+        
+        for (int i = 0; i < scan_msg->ranges.size(); i++){
+            if (scan_msg->ranges[i] > distance_threshold){
+                startindex = i;
+            }
+            while (scan_msg->ranges[i] > distance_threshold){ 
+                gap_size++;
+                i++;
+            }
+            gap_size_hashmap.emplace(startindex, gap_size);
+            startIndex = 0;
+            endIndex = 0;
+            gap_size = 0;
+        }
+
+        int maxgap = 0;
+        int startofgap = 0;
+        int endofgap = 0;
+
+        for (auto gaps : gap_size_hashmap){
+            if (gaps.second > maxgap){
+                maxgap = gaps.second;
+                startofgap = gaps.first;
+                endofgap = gaps.first + gaps.second -1;
+            }
+        }
+        */
 
         // Eliminate all points inside 'bubble' (set them to zero) 
 
