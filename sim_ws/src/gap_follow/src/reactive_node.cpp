@@ -55,13 +55,39 @@ private:
     rclcpp::Publisher<ackermann_msgs::msg::AckermannDriveStamped>::SharedPtr acker_Publisher_;
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_Subscription_;
 
-    vector<double> preprocess_lidar(vector<double> ranges)
+    std::vector<float> preprocess_lidar(std::vector<float> ranges)
     {
+        /*
         vector<double> temp = null;
+        double chg = 0.0; // grab the first range
+        double temp_chg = 0.0;
+        int r_indx = 0;
+        double max_change = 2.0
+
         // Preprocess the LiDAR scan array. Expert implementation includes:
         // 1.Setting each value to the mean over some window
+
+        for(int i = 0; i < ranges.size()-1; i++){
+            temp_chg = abs(ranges[i] - ranges[i+1]);
+            if(abs(ranges[i] - ranges[i + 1]) > max_change){
+                // Difference between two values is greater
+                // than specified difference.
+                // Corrner was found.
+                // change the next 5 values
+                chg = temp_chg;
+                r_indx = i;
+            }
+        }
+        
+        // keep this maybe for later
+        for(int i = 0; i < 5 ; i++){
+
+            results[r_indx] = 0;
+            r_indx++;
+        }
         
         // 2.Rejecting high values (eg. > 3m)
+        */
 
         return ranges;
     }
@@ -72,12 +98,32 @@ private:
         return;
     }
 
-    void find_best_point(float* ranges, int* indice)
-    {   
+    int find_best_point(std::map<int, double> gap)
+    {
+        int index = 0;          // Target index
+        double largest = 0.0;   // Max value
+
         // Start_i & end_i are start and end indicies of max-gap range, respectively
+
+        // Pick the best point by finding the furthest one
+        std::map<int, double>::iterator itr;
+        for (itr = gap.begin(); itr != gap.end(); itr++) {
+            if (itr -> second > largest) {
+                // Take the index of the largest value
+                largest = itr -> first;
+            }
+        }
+
+        RCLCPP_INFO(
+            this -> get_logger(),
+            "\nBest point IDX: %f\t Value: %f.\n",
+            largest,
+            gap[largest])
+        ;
+
         // Return index of best point in ranges
 	    // Naive: Choose the furthest point within ranges and go there
-        return;
+        return index;
     }
 
 
@@ -95,7 +141,7 @@ private:
         );
         */
 
-        std::vector<float> range_data = preprocess_lidar(scan_msg -> ranges);
+        std::vector<float> range_data = this -> preprocess_lidar(scan_msg -> ranges);
         std::map<int, double> largest_gap;      // Global Scope
         std::map<int, double> temp_gap;         // Local Scope
 
@@ -112,7 +158,6 @@ private:
                 // Is it larger than the current largest?
                 if (temp_gap.size() > largest_gap.size()){
                     largest_gap = temp_gap;
-                    // swap(temp_gap, largest_gap);
                 }
                 // Gap is smaller or new largest determined, clear temp
 
@@ -124,51 +169,20 @@ private:
         }
 
         //largest gap
+        /*
         for (auto index : largest_gap){
             RCLCPP_INFO(this -> get_logger(),
             "\nTemp-Idx: %i\tTemp-Value: %f.\n",
             index.first,
             index.second);
         }
+        */
+       this -> find_best_point(largest_gap);
         
         // Process each LiDAR scan as per the Follow Gap algorithm & publish an AckermannDriveStamped Message
 
         /// TODO:
         // Find closest point to LiDAR
-
-        //double scan by billy
-        /*
-        unordered_set<int, int> gap_size_hashmap;
-        int startindex = 0;
-        int endIndex = 0;
-        int gap_size = 0;
-        
-        for (int i = 0; i < scan_msg->ranges.size(); i++){
-            if (scan_msg->ranges[i] > distance_threshold){
-                startindex = i;
-            }
-            while (scan_msg->ranges[i] > distance_threshold){ 
-                gap_size++;
-                i++;
-            }
-            gap_size_hashmap.emplace(startindex, gap_size);
-            startIndex = 0;
-            endIndex = 0;
-            gap_size = 0;
-        }
-
-        int maxgap = 0;
-        int startofgap = 0;
-        int endofgap = 0;
-
-        for (auto gaps : gap_size_hashmap){
-            if (gaps.second > maxgap){
-                maxgap = gaps.second;
-                startofgap = gaps.first;
-                endofgap = gaps.first + gaps.second -1;
-            }
-        }
-        */
 
         // Eliminate all points inside 'bubble' (set them to zero) 
 
