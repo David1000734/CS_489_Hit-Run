@@ -58,37 +58,36 @@ private:
 
     std::vector<float> preprocess_lidar(std::vector<float> ranges)
     {
-        /*
-        vector<double> temp = null;
-        double chg = 0.0; // grab the first range
-        double temp_chg = 0.0;
-        int r_indx = 0;
-        double max_change = 2.0
+        // can take out comments later, just wanted y'all to understand my logic!
+        // only question I have is if we want to set each value to the mean over some window?
+        // and why does it want us rejecting high values in the comment below that was given to us? doesn't make sense since we want high values for gap follow
 
+        double max_change = 1.0; // biggest change we are looking for when finding corners
+        const int skipVal = 5;   // number of values we want to make 0 when we find a corner
+        const double low_threshold = 1.0; // we don't care if values are lower than a certain threshold, get rid of them 
+        
         // Preprocess the LiDAR scan array. Expert implementation includes:
         // 1.Setting each value to the mean over some window
-
-        for(int i = 0; i < ranges.size()-1; i++){
-            temp_chg = abs(ranges[i] - ranges[i+1]);
-            if(abs(ranges[i] - ranges[i + 1]) > max_change){
-                // Difference between two values is greater
-                // than specified difference.
-                // Corrner was found.
-                // change the next 5 values
-                chg = temp_chg;
-                r_indx = i;
-            }
-        }
-        
-        // keep this maybe for later
-        for(int i = 0; i < 5 ; i++){
-
-            results[r_indx] = 0;
-            r_indx++;
-        }
-        
         // 2.Rejecting high values (eg. > 3m)
-        */
+
+
+        // look for difference above our max_change threshold 
+        for(int i = 0; i < ranges.size()-1; i++){
+            if(abs(ranges[i] - ranges[i + 1]) > max_change){
+                int j = 1;
+                // make next 5 values 0
+                while(j <= skipVal && (i + j) < ranges.size()){
+                    ranges[i + j] = 0.0;
+                    j++;
+                }
+                i += skipVal - 1;
+            }
+
+            // if ranges are below a threshold, make them 0 as well
+            if(ranges[i] <= low_threshold){
+                ranges[i] = 0;
+            }
+        }        
 
         return ranges;
     }
