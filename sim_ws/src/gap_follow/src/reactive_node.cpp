@@ -62,31 +62,64 @@ private:
         // only question I have is if we want to set each value to the mean over some window?
         // and why does it want us rejecting high values in the comment below that was given to us? doesn't make sense since we want high values for gap follow
 
-        double max_change = 1.0; // biggest change we are looking for when finding corners
+        double max_change = 0.5; // biggest change we are looking for when finding corners
         const int skipVal = 5;   // number of values we want to make 0 when we find a corner
         const double low_threshold = 1.0; // we don't care if values are lower than a certain threshold, get rid of them 
-        
+
+        // Find what angle ranges is our array in. Ex. -270% to 270%
+        double range_angle = ranges.size() / 4;
+        int target_angle = 90;              // Min AND Max for the new array
+        int difference_angle = 0;           // Difference from our target
+
+        if (range_angle > target_angle) {
+            // Find the difference to ignore
+            difference_angle = target_angle - target_angle;
+        }
+
         // Preprocess the LiDAR scan array. Expert implementation includes:
         // 1.Setting each value to the mean over some window
         // 2.Rejecting high values (eg. > 3m)
 
-
         // look for difference above our max_change threshold 
         for(int i = 0; i < ranges.size()-1; i++){
-            if(abs(ranges[i] - ranges[i + 1]) > max_change){
-                int j = 1;
-                // make next 5 values 0
-                while(j <= skipVal && (i + j) < ranges.size()){
-                    ranges[i + j] = 0.0;
-                    j++;
-                }
-                i += skipVal - 1;
+            if (std::isinf(ranges[i])){
+                ranges[i] = 30.0;
             }
 
             // if ranges are below a threshold, make them 0 as well
-            if(ranges[i] <= low_threshold){
-                ranges[i] = 0;
-            }
+            // Ignore angles outside of less than or greater than 90%
+            // to the car
+            if (ranges[i] <= low_threshold ||
+                i < difference_angle ||
+                i > ranges.size() - difference_angle) {
+                ranges[i] = 0.0;
+
+            } else if(abs(ranges[i] - ranges[i + 1]) > max_change){
+                int j = 1;
+                // make next 5 values 0
+
+                //in this case, the corner is on the 'right', and the change is on the left.
+                // So we extend the values of i, towards the left (positive index on the scan)
+                // and skip past it
+                if (ranges[i] < ranges[i + 1]){
+                    while(j <= skipVal && (i + j) < ranges.size()){
+                        ranges[i + j] = ranges[i]; //changed from 0.0
+                        j++;
+                    }
+                    i += skipVal - 1;
+                }
+                //in this case, the corner is on the 'left' and the change is on the right
+                //so we extend the values of i, back down the angle scan. (negative index)
+                //and overwrite those values 
+                else if (ranges[i] > ranges[i + 1]){
+                    while(j <= skipVal && (i + j) < ranges.size()){
+                        ranges[i - j] = ranges[i]; //changed from 0.0
+                        j++;
+                    }
+                }
+                
+            } else {}
+
         }        
 
         return ranges;
@@ -133,18 +166,69 @@ private:
 
     int find_best_point(std::map<int, double> gap)
     {
-        int index = 0;          // Target index
+        // Between the end and begining / 2
+        int const center = 
+            (gap.rbegin() -> first - gap.begin() -> first) / 2;
+        int index = 0;
 
         // Start_i & end_i are start and end indicies of max-gap range, respectively
 
         // Pick the best point by finding the furthest one
         std::map<int, double>::iterator itr;
-        for (itr = gap.begin(); itr != gap.end(); itr++) {
-            if (itr -> second > gap[index]) {
+        for (itr = gap.begin(); itr -> first > gap.rbegin() -> first; itr++) {
+            // Find the largest value AND the closest
+            // one to the center
+            if ((itr -> second > gap[index]) && 
+                (abs(center - index) > abs(center - itr -> first))) {
                 // Take the index of the largest value
                 index = itr -> first;
+
+        // RCLCPP_INFO(
+        //     this -> get_logger(),
+        //     "center - idx: %i\tcenter - itr: %i\nbegin: %i\tend: %i",
+        //     abs(center - index), abs(center - itr -> first),
+        //     gap.begin() -> first, gap.end() -> first
+        // );
             }
+            // RCLCPP_INFO(
+            //     this -> get_logger(),
+            //     "center: %i\titer: %i\nbegin: %i\tend: %i",
+            //     center, itr -> first,
+            //     abs(gap.begin() -> first), abs(gap.rbegin() -> first)
+            // );
+        
         }
+        RCLCPP_INFO(
+            this -> get_logger(),
+            "center: %i\tindex: %i\nbegin: %i\tend: %i",
+            center, index,
+            abs(gap.begin() -> first), abs(gap.rbegin() -> first)
+        );
+
+
+
+        // Billy's code
+        // float max_dist = 0;
+        // for (auto key : gap) {
+        //     if (key.second > max_dist && 
+        //         abs(center - index) > abs(center - key.first)) {
+        //         // Take the index of the largest value
+        //         max_dist = key.second;
+        //         index = key.first;
+        // // RCLCPP_INFO(
+        // //     this -> get_logger(),
+        // //     "center - idx: %i\tcenter - itr: %i\nbegin: %i\tend: %i",
+        // //     abs(center - index), abs(center - key.first),
+        // //     gap.begin() -> first, gap.end() -> first
+        // // );
+        //     }
+        //     RCLCPP_INFO(
+        //         this -> get_logger(),
+        //         "center: %i\tkey: %i\nbegin: %i\tend: %i",
+        //         center, key.first,
+        //         gap.begin() -> first, prev(gap.end()) -> first
+        //     );
+        // }
 
         // RCLCPP_INFO(
         //     this -> get_logger(),
@@ -175,7 +259,8 @@ private:
         );
         */
 
-        std::vector<float> range_data = this -> preprocess_lidar(scan_msg -> ranges);
+        // std::vector<float> range_data = this -> preprocess_lidar(scan_msg -> ranges);
+        std::vector<float> range_data = scan_msg -> ranges;
         std::map<int, double> largest_gap;      // Global Scope
         std::map<int, double> temp_gap;         // Local Scope
         double steering_angle = 0.0;
@@ -192,6 +277,8 @@ private:
 
                 // Is it larger than the current largest?
                 if (temp_gap.size() > largest_gap.size()){
+                    // Clear before adding our new gap
+                    largest_gap.clear();
                     largest_gap = temp_gap;
                 }
                 // Gap is smaller or new largest determined, clear temp
