@@ -16,7 +16,7 @@ public:
     {
         // Initilize variables
         this -> declare_parameter("mode", "sim");
-        this -> declare_parameter("bubble", 0.0);
+        this -> declare_parameter("bubble", 0);
         this -> declare_parameter("speed", 0.0);
         this -> declare_parameter("gap", 4);
         this -> declare_parameter("dist", 5.0);
@@ -63,7 +63,7 @@ private:
         // and why does it want us rejecting high values in the comment below that was given to us? doesn't make sense since we want high values for gap follow
 
         double max_change = 0.5; // biggest change we are looking for when finding corners
-        const int skipVal = 5;   // number of values we want to make 0 when we find a corner
+        const int skipVal = this -> get_parameter("bubble").as_int();   // number of values we want to make 0 when we find a corner
         const double low_threshold = 1.0; // we don't care if values are lower than a certain threshold, get rid of them 
 
         // Find what angle ranges is our array in. Ex. -270% to 270%
@@ -126,7 +126,7 @@ private:
     }
 
     void find_max_gap(float* ranges, int* indice)
-    {   
+    {
         // Return the start index & end index of the max gap in free_space_ranges
         return;
     }
@@ -161,42 +161,29 @@ private:
         // Assume center is 50 and target is 40
         //     We need to move 20 idx to the left. Which is -20 degrees
 
-        return (center - target_index);
+        return (center - target_index) * 2;
     }
 
     int find_best_point(std::map<int, double> gap)
     {
         // Between the end and begining / 2
         int const center = 
-            (gap.rbegin() -> first - gap.begin() -> first) / 2;
-        int index = 0;
+            (gap.rbegin() -> first + gap.begin() -> first) / 2;
+        int index = center;
 
         // Start_i & end_i are start and end indicies of max-gap range, respectively
 
         // Pick the best point by finding the furthest one
         std::map<int, double>::iterator itr;
-        for (itr = gap.begin(); itr -> first > gap.rbegin() -> first; itr++) {
+        for (itr = gap.begin(); itr != gap.end(); itr++) {
             // Find the largest value AND the closest
             // one to the center
-            if ((itr -> second > gap[index]) && 
-                (abs(center - index) > abs(center - itr -> first))) {
+            if ((itr -> second > gap[index]) &&
+                abs(center - itr -> first) <
+                abs(center - index)) {
                 // Take the index of the largest value
                 index = itr -> first;
-
-        // RCLCPP_INFO(
-        //     this -> get_logger(),
-        //     "center - idx: %i\tcenter - itr: %i\nbegin: %i\tend: %i",
-        //     abs(center - index), abs(center - itr -> first),
-        //     gap.begin() -> first, gap.end() -> first
-        // );
             }
-            // RCLCPP_INFO(
-            //     this -> get_logger(),
-            //     "center: %i\titer: %i\nbegin: %i\tend: %i",
-            //     center, itr -> first,
-            //     abs(gap.begin() -> first), abs(gap.rbegin() -> first)
-            // );
-        
         }
         RCLCPP_INFO(
             this -> get_logger(),
@@ -205,40 +192,6 @@ private:
             abs(gap.begin() -> first), abs(gap.rbegin() -> first)
         );
 
-
-
-        // Billy's code
-        // float max_dist = 0;
-        // for (auto key : gap) {
-        //     if (key.second > max_dist && 
-        //         abs(center - index) > abs(center - key.first)) {
-        //         // Take the index of the largest value
-        //         max_dist = key.second;
-        //         index = key.first;
-        // // RCLCPP_INFO(
-        // //     this -> get_logger(),
-        // //     "center - idx: %i\tcenter - itr: %i\nbegin: %i\tend: %i",
-        // //     abs(center - index), abs(center - key.first),
-        // //     gap.begin() -> first, gap.end() -> first
-        // // );
-        //     }
-        //     RCLCPP_INFO(
-        //         this -> get_logger(),
-        //         "center: %i\tkey: %i\nbegin: %i\tend: %i",
-        //         center, key.first,
-        //         gap.begin() -> first, prev(gap.end()) -> first
-        //     );
-        // }
-
-        // RCLCPP_INFO(
-        //     this -> get_logger(),
-        //     "\nBest point IDX: %f\t Value: %f.\n",
-        //     largest,
-        //     gap[largest])
-        // ;
-
-        // Return index of best point in ranges
-	    // Naive: Choose the furthest point within ranges and go there
         return index;
     }
 
@@ -254,7 +207,7 @@ private:
             this -> get_logger(), 
             "\nmode: %s\tBubble: %f\tSpeed: %f.\n",
             this -> get_parameter("mode").as_string().c_str(),
-            this -> get_parameter("bubble").as_double(),
+            this -> get_parameter("bubble").as_int(),
             this -> get_parameter("speed").as_double()
         );
         */
@@ -265,14 +218,14 @@ private:
         std::map<int, double> temp_gap;         // Local Scope
         double steering_angle = 0.0;
 
-        for (int i = 0; i < range_data.size(); i++) {
+        for (long unsigned int i = 0; i < range_data.size(); i++) {
             // Check the curent point, if it meets our requirements, do stuff
             if (range_data[i] > distance_threshold) {
                 // Store current gap into temp
                 temp_gap[i] = range_data[i];
 
             // Check if gap is larger than current largest_gap
-            } else if (temp_gap.size() > gap_size - 1) {
+            } else if (((int)temp_gap.size()) > gap_size - 1) {
                 // Temp gap meets the size and distance requirements
 
                 // Is it larger than the current largest?
