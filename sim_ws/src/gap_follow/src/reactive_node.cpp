@@ -82,14 +82,10 @@ private:
         // 1.Setting each value to the mean over some window
         // 2.Rejecting high values (eg. > 3m)
 
+/*
         // look for difference above our max_change threshold
         for (int i = 0; i < ranges.size() - 1; i++)
         {
-            if (std::isinf(ranges[i]))
-            {
-                ranges[i] = 30.0;
-            }
-
             // if ranges are below a threshold, make them 0 as well
             // Ignore angles outside of less than or greater than 90%
             // to the car
@@ -132,6 +128,7 @@ private:
             {
             }
         }
+*/
 
         return ranges;
     }
@@ -205,50 +202,64 @@ private:
             }
         }
 
-        RCLCPP_INFO(
-            this->get_logger(),
-            "center: %i\tindex: %i\nbegin: %i\tend: %i",
-            center, index,
-            abs(gap.begin()->first), abs(gap.rbegin()->first));
+        // RCLCPP_INFO(
+        //     this->get_logger(),
+        //     "center: %i\tindex: %i\nbegin: %i\tend: %i",
+        //     center, index,
+        //     abs(gap.begin()->first), abs(gap.rbegin()->first));
 
         return index;
     }
 
     void lidar_callback(const sensor_msgs::msg::LaserScan::ConstSharedPtr scan_msg)
     {
-        double distance_threshold = this -> get_parameter("dist").as_double();
-        int gap_size = this -> get_parameter("gap").as_int();
-        double speed = this -> get_parameter("speed").as_double();
+        double distance_threshold = this->get_parameter("dist").as_double();
+        int gap_size = this->get_parameter("gap").as_int();
+        double speed = this->get_parameter("speed").as_double();
 
-        std::vector<float> range_data = this -> preprocess_lidar(scan_msg -> ranges);
+        std::vector<float> range_data = this->preprocess_lidar(scan_msg->ranges);
         // std::vector<float> range_data = scan_msg->ranges;
         std::map<int, double> largest_gap; // Global Scope
         std::map<int, double> temp_gap;    // Local Scope
         double steering_angle = 0.0;
+        double largest_average = 0.0; // Average depth of largest gap.
 
+        // Just to save a variable slot, will be using
+        // steering_angle as running sum for now
         for (long unsigned int i = 0; i < range_data.size(); i++)
         {
+            // All infinity values are changed to 30.0
+            if (std::isinf(range_data[i]))
+            {
+                range_data[i] = 30.0;
+            }
+
             // Check the curent point, if it meets our requirements, do stuff
             if (range_data[i] > distance_threshold)
             {
                 // Store current gap into temp
                 temp_gap[i] = range_data[i];
 
-                // Check if gap is larger than current largest_gap
+                // Increment running sum
+                steering_angle += range_data[i];
+
+                // Check if gap is larger than minimum requirements
             }
             else if (((int)temp_gap.size()) > gap_size - 1)
             {
-                // Temp gap meets the size and distance requirements
+                // Get the average
+                steering_angle /= temp_gap.size();
 
-                // Is it larger than the current largest?
-                if (temp_gap.size() > largest_gap.size())
+                // Is the current depth deeper than largest
+                if (steering_angle > largest_average)
                 {
                     // Clear before adding our new gap
-                    largest_gap.clear();
                     largest_gap = temp_gap;
                 }
-                // Gap is smaller or new largest determined, clear temp
 
+                // Reset average and clear running sum
+                largest_average = steering_angle;
+                steering_angle = 0;
                 temp_gap.clear();
             }
             else
@@ -257,164 +268,139 @@ private:
                 temp_gap.clear();
             }
         }
-            // largest gap
-            /*
-            // DEBUG
-            for (auto index : largest_gap){
-                RCLCPP_INFO(this -> get_logger(),
-                "\nTemp-Idx: %i\tTemp-Value: %f.\n",
-                index.first,
-                index.second);
-            }
+        // Steering_angle goes back to it's original purpose
 
-            // DEBUG
-            int temp = this -> find_best_point(largest_gap);
-            RCLCPP_INFO(this -> get_logger(),
-                "\nTarget: %i\tAngle: %f\n",
-                temp,
-                get_steering_angle(scan_msg -> ranges.size(), temp)
-            );
+        // Redundent code
+        // if (temp_gap.size() > gap_size - 1 && temp_gap.size() > largest_gap.size())
+        // {
+        //     largest_gap = temp_gap;
+        // }
 
-            // DEBUG
-            for (int i = -20; i < 40; i += 10) {
-                RCLCPP_INFO(this -> get_logger(),
-                    "\nTarget: %f\tAngle: %f\n",
-                    i,
-                    get_steering_angle(scan_msg -> ranges, i)
-                );
-            }
-            */
-            if (temp_gap.size() > gap_size - 1 && temp_gap.size() > largest_gap.size())
-            {
-                largest_gap = temp_gap;
-            }
-            if (largest_gap.size() == 0)
-            {
-                RCLCPP_INFO(
-                    this->get_logger(),
-                    "ERROR NO GAP\n\n\n\n\n\nERROR NO GAP");
-                steering_angle = get_steering_angle(scan_msg->ranges.size(), 540, scan_msg->angle_increment);
-                double steering_rad = degree_to_radian(steering_angle);
-                publish_ackerman(1.0, steering_rad);
-                return;
-            }
-
-            int target_idx = this->find_best_point(largest_gap);
-
-            int random = rand() % 100;
-
-            
-
-            steering_angle = get_steering_angle(
-                scan_msg->ranges.size(),
-                target_idx,
-                scan_msg->angle_increment);
-
-            steering_angle *= -1; // Turn away from walls.
-
-            if (steering_angle > 20.0)
-            {
-                steering_angle = 20.0;
-            }
-            if (steering_angle < -20.0)
-            {
-                steering_angle = -20.0;
-            }
-
-            // steering_angle = get_steering_angle(
-            //                     scan_msg -> ranges.size(),
-            //                     find_best_point(largest_gap)
-            // );
-
-            // If the steering angle is between 0 degrees and 10 degrees, the car should drive at 1.5 meters per second.
-            // If the steering angle is between 10 degrees and 20 degrees, the speed should be 1.0 meters per second.
-            // Otherwise, the speed should be 0.5 meters per second.
-            if (steering_angle >= -4.0000 && steering_angle <= 4.0000)
-            {
-                speed = 5.0
-
-                // If less than 20 and greater than 10
-            }
-            else if (steering_angle > 4.0000 && steering_angle <= 10.0000 ||
-                     (steering_angle < -4.0000 && steering_angle >= -10.0000))
-            {
-                speed = 2.0
-
-                // If less than 20 and greater than 10
-            }
-            else if ((steering_angle > 10.0000 && steering_angle < 20.0001) ||
-                     (steering_angle < -10.0000 && steering_angle > -20.0001))
-            {
-                speed = 1.0;
-                // Any other steering angle, speed is 0.5
-            }
-            else
-            {
-                speed = 0.5;
-            }
-
-            // Process each LiDAR scan as per the Follow Gap algorithm & publish an AckermannDriveStamped Message
-
-            /// TODO:
-            // Find closest point to LiDAR
-
-            // Eliminate all points inside 'bubble' (set them to zero)
-
-            // Find max length gap
-
-            // Find the best point in the gap
-
-            // Publish Drive message
-            publish_ackerman(speed, degree_to_radian(steering_angle));
-        }
-
-        /// @brief Helper function to post the speed and angle for the car
-        ///
-        /// @param car_speed Specified speed for the car. Nullable
-        ///
-        /// @param steer_angle Specified angle. Nullable
-        ///
-        /// @param debug True if you want to print the
-        /// speed and angle being published. Default is false.
-        void publish_ackerman(const double car_speed = 0.0, const double steer_angle = 0.0, const bool debug = false)
+        if (largest_gap.size() == 0)
         {
-            ackermann_msgs::msg::AckermannDriveStamped acker_message = ackermann_msgs::msg::AckermannDriveStamped();
-
-            if (debug)
-            {
-                RCLCPP_INFO(
-                    this->get_logger(),
-                    "\n***** Try Publish *****\nSpeed: %f\tSteering_Angle: %f\n",
-                    car_speed, steer_angle);
-            }
-
-            // Set the speed and angle
-            acker_message.drive.speed = car_speed;
-            acker_message.drive.steering_angle = steer_angle;
-
-            // Publish
-            acker_Publisher_->publish(acker_message);
-
-            if (debug)
-            {
-                RCLCPP_INFO(
-                    this->get_logger(),
-                    "\n***** Published *****\nSpeed: %f\tSteering_Angle: %f\n",
-                    acker_message.drive.speed, acker_message.drive.steering_angle);
-            }
+            RCLCPP_INFO(
+                this->get_logger(),
+                "ERROR NO GAP\n\n\n\n\n\nERROR NO GAP");
+            steering_angle = get_steering_angle(scan_msg->ranges.size(), 540, scan_msg->angle_increment);
+            double steering_rad = degree_to_radian(steering_angle);
+            publish_ackerman(1.0, steering_rad);
+            return;
         }
 
-        double degree_to_radian(double degrees)
+        int target_idx = this->find_best_point(largest_gap);
+
+        steering_angle = get_steering_angle(
+            scan_msg->ranges.size(),
+            target_idx,
+            scan_msg->angle_increment);
+
+        steering_angle *= -1; // Turn away from walls.
+
+        // Angle clamping
+        if (steering_angle > 20.0)
         {
-            // Helper function, change degrees to radian.
-            return (degrees * (PI / 180));
+            steering_angle = 20.0;
         }
-    };
+        if (steering_angle < -20.0)
+        {
+            steering_angle = -20.0;
+        }
 
-    int main(int argc, char **argv)
-    {
-        rclcpp::init(argc, argv);
-        rclcpp::spin(std::make_shared<ReactiveFollowGap>());
-        rclcpp::shutdown();
-        return 0;
+        // steering_angle = get_steering_angle(
+        //                     scan_msg -> ranges.size(),
+        //                     find_best_point(largest_gap)
+        // );
+
+        // If the steering angle is between 0 degrees and 10 degrees, the car should drive at 1.5 meters per second.
+        // If the steering angle is between 10 degrees and 20 degrees, the speed should be 1.0 meters per second.
+        // Otherwise, the speed should be 0.5 meters per second.
+        if (steering_angle >= -4.0000 && steering_angle <= 4.0000)
+        {
+            // Speed will be specified by the launch parameters
+
+            // If less than 20 and greater than 10
+        }
+        else if (steering_angle > 4.0000 && steering_angle <= 10.0000 ||
+                 (steering_angle < -4.0000 && steering_angle >= -10.0000))
+        {
+            // Speed is 75% of user specified speed.
+            speed *= 0.75;
+
+            // If less than 20 and greater than 10
+        }
+        else if ((steering_angle > 10.0000 && steering_angle < 20.0001) ||
+                 (steering_angle < -10.0000 && steering_angle > -20.0001))
+        {
+            speed = 1.0;
+            // Any other steering angle, speed is 0.5
+        }
+        else
+        {
+            speed = 0.5;
+        }
+
+        // Process each LiDAR scan as per the Follow Gap algorithm & publish an AckermannDriveStamped Message
+
+        /// TODO:
+        // Find closest point to LiDAR
+
+        // Eliminate all points inside 'bubble' (set them to zero)
+
+        // Find max length gap
+
+        // Find the best point in the gap
+
+        // Publish Drive message
+        publish_ackerman(speed, degree_to_radian(steering_angle));
     }
+
+    /// @brief Helper function to post the speed and angle for the car
+    ///
+    /// @param car_speed Specified speed for the car. Nullable
+    ///
+    /// @param steer_angle Specified angle. Nullable
+    ///
+    /// @param debug True if you want to print the
+    /// speed and angle being published. Default is false.
+    void publish_ackerman(const double car_speed = 0.0, const double steer_angle = 0.0, const bool debug = false)
+    {
+        ackermann_msgs::msg::AckermannDriveStamped acker_message = ackermann_msgs::msg::AckermannDriveStamped();
+
+        if (debug)
+        {
+            RCLCPP_INFO(
+                this->get_logger(),
+                "\n***** Try Publish *****\nSpeed: %f\tSteering_Angle: %f\n",
+                car_speed, steer_angle);
+        }
+
+        // Set the speed and angle
+        acker_message.drive.speed = car_speed;
+        acker_message.drive.steering_angle = steer_angle;
+
+        // Publish
+        acker_Publisher_->publish(acker_message);
+
+        if (debug)
+        {
+            RCLCPP_INFO(
+                this->get_logger(),
+                "\n***** Published *****\nSpeed: %f\tSteering_Angle: %f\n",
+                acker_message.drive.speed, acker_message.drive.steering_angle);
+        }
+    }
+
+    double degree_to_radian(double degrees)
+    {
+        // Helper function, change degrees to radian.
+        return (degrees * (PI / 180));
+    }
+};
+
+int main(int argc, char **argv)
+{
+    rclcpp::init(argc, argv);
+    rclcpp::spin(std::make_shared<ReactiveFollowGap>());
+    rclcpp::shutdown();
+    return 0;
+}
