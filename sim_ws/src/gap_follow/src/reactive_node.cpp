@@ -329,14 +329,21 @@ private:
             // If the steering angle is between 0 degrees and 10 degrees, the car should drive at 1.5 meters per second.
             // If the steering angle is between 10 degrees and 20 degrees, the speed should be 1.0 meters per second.
             // Otherwise, the speed should be 0.5 meters per second.
-            if (steering_angle > -10.0001 && steering_angle < 10.0001)
+            if (steering_angle >= -4.0000 && steering_angle <= 4.0000)
             {
-                // speed = speed
+                speed = 5.0
 
                 // If less than 20 and greater than 10
             }
-            else if ((steering_angle > 9.999 && steering_angle < 20.0001) ||
-                     (steering_angle > -10.0001 && steering_angle < -20.0001))
+            else if (steering_angle > 4.0000 && steering_angle <= 10.0000 ||
+                     (steering_angle < -4.0000 && steering_angle >= -10.0000))
+            {
+                speed = 2.0
+
+                // If less than 20 and greater than 10
+            }
+            else if ((steering_angle > 10.0000 && steering_angle < 20.0001) ||
+                     (steering_angle < -10.0000 && steering_angle > -20.0001))
             {
                 speed = 1.0;
                 // Any other steering angle, speed is 0.5
