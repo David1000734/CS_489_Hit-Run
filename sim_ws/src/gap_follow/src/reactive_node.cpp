@@ -59,10 +59,7 @@ private:
 
     std::vector<float> preprocess_lidar(std::vector<float> ranges)
     {
-        // can take out comments later, just wanted y'all to understand my logic!
-        // only question I have is if we want to set each value to the mean over some window?
-        // and why does it want us rejecting high values in the comment below that was given to us? doesn't make sense since we want high values for gap follow
-
+/*
         double max_change = 0.5;                                    // biggest change we are looking for when finding corners
         const int skipVal = this->get_parameter("bubble").as_int(); // number of values we want to make 0 when we find a corner
         const double low_threshold = 1.0;                           // we don't care if values are lower than a certain threshold, get rid of them
@@ -82,7 +79,6 @@ private:
         // 1.Setting each value to the mean over some window
         // 2.Rejecting high values (eg. > 3m)
 
-/*
         // look for difference above our max_change threshold
         for (int i = 0; i < ranges.size() - 1; i++)
         {
@@ -133,12 +129,6 @@ private:
         return ranges;
     }
 
-    void find_max_gap(float *ranges, int *indice)
-    {
-        // Return the start index & end index of the max gap in free_space_ranges
-        return;
-    }
-
     /// @brief Funciton will calculate the target degrees to reach each degree
     /// Presumable able to handle different size arrays but untested.
     ///
@@ -161,12 +151,12 @@ private:
         // If we take that (size / 2) / 2, this would get us the
         // positive range of our angles. Thus our angle is +- that value
         double center = arr_size / 2;      // Center of the angles
-        double range_angle = arr_size / 4; // Dividing by 2 twice. Just divide by 4
 
-        RCLCPP_INFO(
-            this->get_logger(),
-            "target i: %i\n",
-            target_index);
+        // RCLCPP_INFO(
+        //     this->get_logger(),
+        //     "target i: %i\n",
+        //     target_index);
+
         float increment_angle = increment * 180 / PI;
         // To get to our target index, all we do is target - center
         // Assume we have a range of 100, target is 80
@@ -278,9 +268,11 @@ private:
 
         if (largest_gap.size() == 0)
         {
-            RCLCPP_INFO(
-                this->get_logger(),
-                "ERROR NO GAP\n\n\n\n\n\nERROR NO GAP");
+            // RCLCPP_INFO(
+            //     this->get_logger(),
+            //     "ERROR NO GAP\n\n\n\n\n\nERROR NO GAP"
+            // );
+
             steering_angle = get_steering_angle(scan_msg->ranges.size(), 540, scan_msg->angle_increment);
             double steering_rad = degree_to_radian(steering_angle);
             publish_ackerman(1.0, steering_rad);
@@ -320,7 +312,7 @@ private:
 
             // If less than 20 and greater than 10
         }
-        else if (steering_angle > 4.0000 && steering_angle <= 10.0000 ||
+        else if ((steering_angle > 4.0000 && steering_angle <= 10.0000) ||
                  (steering_angle < -4.0000 && steering_angle >= -10.0000))
         {
             // Speed is 75% of user specified speed.
