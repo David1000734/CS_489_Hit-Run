@@ -21,6 +21,7 @@ public:
         this->declare_parameter("speed", 0.0);
         this->declare_parameter("gap", 4);
         this->declare_parameter("dist", 5.0);
+        this->declare_parameter("change", 0.5);
         std::string sim_car = "/odom"; // Physical Car
 
         if (this->get_parameter("mode").as_string() == "sim")
@@ -59,72 +60,87 @@ private:
 
     std::vector<float> preprocess_lidar(std::vector<float> ranges)
     {
-/*
-        double max_change = 0.5;                                    // biggest change we are looking for when finding corners
-        const int skipVal = this->get_parameter("bubble").as_int(); // number of values we want to make 0 when we find a corner
-        const double low_threshold = 1.0;                           // we don't care if values are lower than a certain threshold, get rid of them
+        const double max_change = this->get_parameter("change").as_double(); // biggest change we are looking for when finding corners
+        const int bubble = this->get_parameter("bubble").as_int();           // number of values we want to make 0 when we find a corner
 
-        // Find what angle ranges is our array in. Ex. -270% to 270%
-        double range_angle = ranges.size() / 4;
-        int target_angle = 90;    // Min AND Max for the new array
-        int difference_angle = 0; // Difference from our target
-
-        if (range_angle > target_angle)
-        {
-            // Find the difference to ignore
-            difference_angle = target_angle - target_angle;
-        }
+        int size = ranges.size();
 
         // Preprocess the LiDAR scan array. Expert implementation includes:
         // 1.Setting each value to the mean over some window
         // 2.Rejecting high values (eg. > 3m)
 
-        // look for difference above our max_change threshold
-        for (int i = 0; i < ranges.size() - 1; i++)
+        for (int i = 0; i < size - 1; i++)
         {
+            // All infinity values are changed to 30.0
+            if (std::isinf(range_data[i]))
+            {
+                range_data[i] = 30.0;
+            }
+
             // if ranges are below a threshold, make them 0 as well
             // Ignore angles outside of less than or greater than 90%
             // to the car
-            if (ranges[i] <= low_threshold ||
-                i < difference_angle ||
-                i > ranges.size() - difference_angle)
+            if (fabs(ranges[i] - ranges[i + 1]) > max_change)
             {
-                ranges[i] = 0.0;
-            }
-            else if (abs(ranges[i] - ranges[i + 1]) > max_change)
-            {
-                int j = 1;
-                // make next 5 values 0
-
                 // in this case, the corner is on the 'right', and the change is on the left.
                 //  So we extend the values of i, towards the left (positive index on the scan)
                 //  and skip past it
                 if (ranges[i] < ranges[i + 1])
                 {
-                    while (j <= skipVal && (i + j) < ranges.size())
+                    // Start from i and move up to i + bubble
+                    // Sign extend from whatever value i is
+                    // Notice we have to ensure we do not move out side the array
+                    for (int j = i; (j < i + bubble && j + bubble < size); j++)
                     {
-                        ranges[i + j] = ranges[i]; // changed from 0.0
-                        j++;
+                        // RCLCPP_INFO (
+                        //     this -> get_logger(),
+                        //     "Left Extended, Before: %f\tAfter: %f\n",
+                        //     ranges[j], ranges[i]
+                        // );
+
+                        ranges[j] = ranges[i]; // Extend the corner
+                        size--;
                     }
-                    i += skipVal - 1;
                 }
                 // in this case, the corner is on the 'left' and the change is on the right
                 // so we extend the values of i, back down the angle scan. (negative index)
                 // and overwrite those values
                 else if (ranges[i] > ranges[i + 1])
                 {
-                    while (j <= skipVal && (i + j) < ranges.size())
+                    // Start from i - bubble and go up to j
+                    // We will sign extend from whatever i's value is
+                    // Notice we only have to ensure that i - bubble does not get a negative value
+                    for (int j = i - bubble; (j < i && j > -1); j++)
                     {
-                        ranges[i - j] = ranges[i]; // changed from 0.0
-                        j++;
+                        // RCLCPP_INFO (
+                        //     this -> get_logger(),
+                        //     "Right Extended, Before: %f\tAfter: %f\n",
+                        //     ranges[j], ranges[i + 1]
+                        // );
+
+                        ranges[j] = ranges[i + 1]; // Extend the corner
                     }
+                }
+                else
+                {
                 }
             }
             else
             {
             }
         }
-*/
+        //             RCLCPP_INFO(this -> get_logger(),
+        //                 "\nPre-processed Array: "
+        //             );
+        // for (int i = 0; i < size; i++) {
+        //     RCLCPP_INFO(this -> get_logger(),
+        //         "%f",
+        //         ranges[i]
+        //     );
+        // }
+        //             RCLCPP_INFO(this -> get_logger(),
+        //                 "Pre-processed End Array.\n"
+        //             );
 
         return ranges;
     }
@@ -150,7 +166,7 @@ private:
         //
         // If we take that (size / 2) / 2, this would get us the
         // positive range of our angles. Thus our angle is +- that value
-        double center = arr_size / 2;      // Center of the angles
+        double center = arr_size / 2; // Center of the angles
 
         // RCLCPP_INFO(
         //     this->get_logger(),
@@ -183,6 +199,13 @@ private:
         {
             // Find the largest value AND the closest
             // one to the center
+            // TODO: Depending on distance, we may want to target slighly off center
+            // Ex. If we are close, and aiming for a left turn,
+            // pick a point that is a little more left of the center
+            //
+            // If we are far, and aiming for a right turn,
+            // pick a point that is closer to the center.
+            // And vise versa
             if ((itr->second > gap[index]) &&
                 abs(center - itr->first) <
                     abs(center - index))
@@ -218,12 +241,6 @@ private:
         // steering_angle as running sum for now
         for (long unsigned int i = 0; i < range_data.size(); i++)
         {
-            // All infinity values are changed to 30.0
-            if (std::isinf(range_data[i]))
-            {
-                range_data[i] = 30.0;
-            }
-
             // Check the curent point, if it meets our requirements, do stuff
             if (range_data[i] > distance_threshold)
             {
@@ -273,16 +290,16 @@ private:
             //     "ERROR NO GAP\n\n\n\n\n\nERROR NO GAP"
             // );
 
-            steering_angle = get_steering_angle(scan_msg->ranges.size(), 540, scan_msg->angle_increment);
-            double steering_rad = degree_to_radian(steering_angle);
-            publish_ackerman(1.0, steering_rad);
+            // steering_angle = get_steering_angle(scan_msg->ranges.size(), 540, scan_msg->angle_increment);
+            // double steering_rad = degree_to_radian(steering_angle);
+            // publish_ackerman(1.0, steering_rad);
             return;
         }
 
         int target_idx = this->find_best_point(largest_gap);
 
         steering_angle = get_steering_angle(
-            scan_msg->ranges.size(),
+            scan_msg->rangesranges.size(),
             target_idx,
             scan_msg->angle_increment);
 
@@ -341,6 +358,7 @@ private:
         // Find max length gap
 
         // Find the best point in the gap
+        // rclcpp::shutdown();
 
         // Publish Drive message
         publish_ackerman(speed, degree_to_radian(steering_angle));

@@ -15,7 +15,8 @@ def generate_launch_description():
             {'bubble': LaunchConfiguration('bubble', default = '2')},
             {'speed' : LaunchConfiguration('speed', default = '2.0')},
             {'gap'   : LaunchConfiguration('gap', default = '4')},
-            {'dist'  : LaunchConfiguration('dist', default = '5.0')}
+            {'dist'  : LaunchConfiguration('dist', default = '5.0')},
+            {'change': LaunchConfiguration('change', default = '0.5')}
         ]
     )
 
