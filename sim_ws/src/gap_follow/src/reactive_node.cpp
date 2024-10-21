@@ -72,9 +72,9 @@ private:
         for (int i = 0; i < size - 1; i++)
         {
             // All infinity values are changed to 30.0
-            if (std::isinf(range_data[i]))
+            if (std::isinf(ranges[i]))
             {
-                range_data[i] = 30.0;
+                ranges[i] = 30.0;
             }
 
             // if ranges are below a threshold, make them 0 as well
@@ -299,7 +299,7 @@ private:
         int target_idx = this->find_best_point(largest_gap);
 
         steering_angle = get_steering_angle(
-            scan_msg->rangesranges.size(),
+            scan_msg->ranges.size(),
             target_idx,
             scan_msg->angle_increment);
 
