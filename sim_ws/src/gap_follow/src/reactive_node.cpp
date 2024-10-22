@@ -75,7 +75,7 @@ private:
         for (int i = 0; i < size - 1; i++)
         {
             if (i < 180 || i > 900) {
-                ranges[i] = 0.0;
+                ranges[i] = 1.0;
             }
 
             // All infinity values are changed to 30.0
@@ -241,11 +241,11 @@ private:
             }
         }
 
-        // RCLCPP_INFO(
-        //     this->get_logger(),
-        //     "center: %i\tindex: %i\nbegin: %i\tend: %i",
-        //     center, index,
-        //     abs(gap.begin()->first), abs(gap.rbegin()->first));
+        RCLCPP_INFO(
+            this->get_logger(),
+            "center: %i\tindex: %i\nbegin: %i\tend: %i",
+            center, index,
+            abs(gap.begin()->first), abs(gap.rbegin()->first));
 
         return index;
     }
@@ -304,10 +304,10 @@ private:
 
         if (largest_gap.size() == 0)
         {
-            // RCLCPP_INFO(
-            //     this->get_logger(),
-            //     "ERROR NO GAP\n\n\n\n\n\nERROR NO GAP"
-            // );
+            RCLCPP_INFO(
+                this->get_logger(),
+                "ERROR NO GAP\n\n\n\n\n\nERROR NO GAP"
+            );
 
             // steering_angle = get_steering_angle(scan_msg->ranges.size(), 540, scan_msg->angle_increment);
             // double steering_rad = degree_to_radian(steering_angle);
@@ -334,11 +334,6 @@ private:
             steering_angle = -20.0;
         }
 
-        // steering_angle = get_steering_angle(
-        //                     scan_msg -> ranges.size(),
-        //                     find_best_point(largest_gap)
-        // );
-
         // If the steering angle is between 0 degrees and 10 degrees, the car should drive at 1.5 meters per second.
         // If the steering angle is between 10 degrees and 20 degrees, the speed should be 1.0 meters per second.
         // Otherwise, the speed should be 0.5 meters per second.
@@ -352,19 +347,23 @@ private:
                  (steering_angle < -4.0000 && steering_angle >= -10.0000))
         {
             // Speed is 75% of user specified speed.
-            speed *= 0.75;
+            speed += 2;
+            speed /= 2;
 
             // If less than 20 and greater than 10
         }
         else if ((steering_angle > 10.0000 && steering_angle < 20.0001) ||
                  (steering_angle < -10.0000 && steering_angle > -20.0001))
         {
-            speed = 1.0;
+            speed += 1;
+            speed /= 2;
             // Any other steering angle, speed is 0.5
         }
         else
         {
-            speed = 0.5;
+            speed += 1;
+            speed /= 2;
+            // speed = (speed+1)/2
         }
 
         // Process each LiDAR scan as per the Follow Gap algorithm & publish an AckermannDriveStamped Message
