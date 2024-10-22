@@ -287,6 +287,21 @@ private:
                 {
                     // Clear before adding our new gap
                     largest_gap = temp_gap;
+
+                // RCLCPP_INFO(
+                //     this->get_logger(),
+                //     "Gap %i\n",
+                //     i
+                // );
+
+                // for (auto it = temp_gap.begin(); it != temp_gap.end(); ++it)
+                //     {
+                //         RCLCPP_INFO(
+                //             this -> get_logger(),
+                //             "Found a gap: %i",
+                //             it -> first
+                //         );
+                //     }
                 }
 
                 // Reset average and clear running sum
@@ -301,6 +316,12 @@ private:
             }
         }
         // Steering_angle goes back to it's original purpose
+
+        // If the whole scan is a gap, take that gap.
+        if (temp_gap.size() > gap_size - 1 && temp_gap.size() > largest_gap.size())
+        {
+            largest_gap = temp_gap;
+        }
 
         if (largest_gap.size() == 0)
         {
