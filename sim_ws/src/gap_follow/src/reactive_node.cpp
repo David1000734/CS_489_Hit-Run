@@ -17,7 +17,8 @@ public:
     {
         // Initilize variables
         this->declare_parameter("mode", "sim");
-        this->declare_parameter("bubble", 0);
+        this->declare_parameter("bubble", 0.1);
+        this->declare_parameter("disp" , 5);
         this->declare_parameter("speed", 0.0);
         this->declare_parameter("gap", 4);
         this->declare_parameter("dist", 5.0);
@@ -28,6 +29,7 @@ public:
         {
             sim_car = "/ego_racecar/odom"; // Sim Car
         }
+        // ros2 launch src/gap_follow/gap_follow/gap_follow_launch.py speed:=1.0 disp:=10 dist:=1.5 gap:=20 change:=2.5 bubble:=0.24 mode:=sim
 
         /// TODO: create ROS subscribers and publishers
         // Ackerman Publisher
@@ -58,10 +60,11 @@ private:
     rclcpp::Publisher<ackermann_msgs::msg::AckermannDriveStamped>::SharedPtr acker_Publisher_;
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_Subscription_;
 
-    std::vector<float> preprocess_lidar(std::vector<float> ranges)
+    std::vector<float> preprocess_lidar(std::vector<float> ranges, float increment)
     {
         const double max_change = this->get_parameter("change").as_double(); // biggest change we are looking for when finding corners
-        const int bubble = this->get_parameter("bubble").as_int();           // number of values we want to make 0 when we find a corner
+        const double bubble = this->get_parameter("bubble").as_double();           // number of values we want to make 0 when we find a corner
+        const double disp = this->get_parameter("disp").as_int();           // number of values we want to make 0 when we find a corner
 
         int size = ranges.size();
 
@@ -71,6 +74,10 @@ private:
 
         for (int i = 0; i < size - 1; i++)
         {
+            if (i < 180 || i > 900) {
+                ranges[i] = 0.0;
+            }
+
             // All infinity values are changed to 30.0
             if (std::isinf(ranges[i]))
             {
@@ -90,7 +97,7 @@ private:
                     // Start from i and move up to i + bubble
                     // Sign extend from whatever value i is
                     // Notice we have to ensure we do not move out side the array
-                    for (int j = i; (j < i + bubble && j + bubble < size); j++)
+                    for (int j = i; (j < i + disp && j + disp < size); j++)
                     {
                         // RCLCPP_INFO (
                         //     this -> get_logger(),
@@ -110,7 +117,7 @@ private:
                     // Start from i - bubble and go up to j
                     // We will sign extend from whatever i's value is
                     // Notice we only have to ensure that i - bubble does not get a negative value
-                    for (int j = i - bubble; (j < i && j > -1); j++)
+                    for (int j = i - disp; (j < i && j > -1); j++)
                     {
                         // RCLCPP_INFO (
                         //     this -> get_logger(),
@@ -129,6 +136,25 @@ private:
             {
             }
         }
+
+        double smallest_value = 1000;
+            int smallest_index = (ranges.size() / 2);
+            for (long unsigned int i = 180; i < ranges.size()-180; i++) {
+                if (ranges[i] < smallest_value) {
+                    smallest_value = ranges[i];
+                    smallest_index = i;
+                }
+            }
+
+            double half_rad_angle_to_bubble_radius = atan(bubble / ranges[smallest_index]);
+            int half_num_of_indices = round(half_rad_angle_to_bubble_radius / increment);
+
+            for (int i = smallest_index - half_num_of_indices; i < smallest_index + half_num_of_indices; i++){
+                if (i >= 0 && i < ranges.size()){
+                    ranges[i] = 0;
+                }
+                else continue;
+            }
         //             RCLCPP_INFO(this -> get_logger(),
         //                 "\nPre-processed Array: "
         //             );
@@ -230,8 +256,7 @@ private:
         int gap_size = this->get_parameter("gap").as_int();
         double speed = this->get_parameter("speed").as_double();
 
-        std::vector<float> range_data = this->preprocess_lidar(scan_msg->ranges);
-        // std::vector<float> range_data = scan_msg->ranges;
+        std::vector<float> range_data = this->preprocess_lidar(scan_msg->ranges, scan_msg -> angle_increment);
         std::map<int, double> largest_gap; // Global Scope
         std::map<int, double> temp_gap;    // Local Scope
         double steering_angle = 0.0;
@@ -276,12 +301,6 @@ private:
             }
         }
         // Steering_angle goes back to it's original purpose
-
-        // Redundent code
-        // if (temp_gap.size() > gap_size - 1 && temp_gap.size() > largest_gap.size())
-        // {
-        //     largest_gap = temp_gap;
-        // }
 
         if (largest_gap.size() == 0)
         {
