@@ -66,16 +66,14 @@ private:
         const double bubble = this->get_parameter("bubble").as_double();           // number of values we want to make 0 when we find a corner
         const double disp = this->get_parameter("disp").as_int();           // number of values we want to make 0 when we find a corner
 
-        int size = ranges.size();
-
         // Preprocess the LiDAR scan array. Expert implementation includes:
         // 1.Setting each value to the mean over some window
         // 2.Rejecting high values (eg. > 3m)
 
-        for (int i = 0; i < size - 1; i++)
+        for (int i = 0; i < ranges.size() - 1; i++)
         {
             if (i < 180 || i > 900) {
-                ranges[i] = 1.0;
+                ranges[i] = 0.0;
             }
 
             // All infinity values are changed to 30.0
@@ -97,7 +95,7 @@ private:
                     // Start from i and move up to i + bubble
                     // Sign extend from whatever value i is
                     // Notice we have to ensure we do not move out side the array
-                    for (int j = i; (j < i + disp && j + disp < size); j++)
+                    for (int j = i; (j < i + disp && j < ranges.size()); j++)
                     {
                         // RCLCPP_INFO (
                         //     this -> get_logger(),
@@ -106,8 +104,8 @@ private:
                         // );
 
                         ranges[j] = ranges[i]; // Extend the corner
-                        size--;
                     }
+                    i += disp;
                 }
                 // in this case, the corner is on the 'left' and the change is on the right
                 // so we extend the values of i, back down the angle scan. (negative index)
@@ -232,7 +230,7 @@ private:
             // If we are far, and aiming for a right turn,
             // pick a point that is closer to the center.
             // And vise versa
-            if ((itr->second > gap[index]) &&
+            if ((itr->second >= gap[index]) &&
                 abs(center - itr->first) <
                     abs(center - index))
             {
@@ -273,17 +271,17 @@ private:
                 temp_gap[i] = range_data[i];
 
                 // Increment running sum
-                steering_angle += range_data[i];
+                // steering_angle += range_data[i];
 
                 // Check if gap is larger than minimum requirements
             }
             else if (((int)temp_gap.size()) > gap_size - 1)
             {
                 // Get the average
-                steering_angle /= temp_gap.size();
+                // steering_angle /= temp_gap.size();
 
                 // Is the current depth deeper than largest
-                if (steering_angle > largest_average)
+                if ((int)temp_gap.size() > (int)largest_gap.size())
                 {
                     // Clear before adding our new gap
                     largest_gap = temp_gap;
