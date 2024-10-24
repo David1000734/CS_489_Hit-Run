@@ -42,12 +42,6 @@ public:
             "/drive",
             10);
 
-        // Odometry subscriber
-        odom_Subscription_ = this->create_subscription<nav_msgs::msg::Odometry>(
-            sim_car,
-            10,
-            std::bind(&WallFollow::odom_callback, this, _1));
-
         // Laser scan subscriber
         scan_Subscription_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
             "/scan",
@@ -82,7 +76,6 @@ private:
 
     /// TODO: create ROS subscribers and publishers
     rclcpp::Publisher<ackermann_msgs::msg::AckermannDriveStamped>::SharedPtr acker_Publisher_;
-    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_Subscription_;
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_Subscription_;
 
     double get_range(const std::vector<float> range_data, double angle)
