@@ -258,7 +258,7 @@ private:
         std::map<int, double> largest_gap; // Global Scope
         std::map<int, double> temp_gap;    // Local Scope
         double steering_angle = 0.0;
-        double largest_average = 0.0; // Average depth of largest gap.
+        double largest_average = 0.0;
 
         // Just to save a variable slot, will be using
         // steering_angle as running sum for now
@@ -271,17 +271,17 @@ private:
                 temp_gap[i] = range_data[i];
 
                 // Increment running sum
-                // steering_angle += range_data[i];
+                steering_angle += range_data[i];
 
                 // Check if gap is larger than minimum requirements
             }
             else if (((int)temp_gap.size()) > gap_size - 1)
             {
                 // Get the average
-                // steering_angle /= temp_gap.size();
+                steering_angle /= temp_gap.size();
 
                 // Is the current depth deeper than largest
-                if ((int)temp_gap.size() > (int)largest_gap.size())
+                if (steering_angle > largest_average)
                 {
                     // Clear before adding our new gap
                     largest_gap = temp_gap;
@@ -382,7 +382,6 @@ private:
         {
             speed += 1;
             speed /= 2;
-            // speed = (speed+1)/2
         }
 
         // Process each LiDAR scan as per the Follow Gap algorithm & publish an AckermannDriveStamped Message
