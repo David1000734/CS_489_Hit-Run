@@ -70,7 +70,7 @@ private:
         // 1.Setting each value to the mean over some window
         // 2.Rejecting high values (eg. > 3m)
 
-        for (int i = 0; i < ranges.size() - 1; i++)
+        for (int i = 0; i < (int)ranges.size() - 1; i++)
         {
             if (i < 180 || i > 900) {
                 ranges[i] = 0.0;
@@ -95,7 +95,7 @@ private:
                     // Start from i and move up to i + bubble
                     // Sign extend from whatever value i is
                     // Notice we have to ensure we do not move out side the array
-                    for (int j = i; (j < i + disp && j < ranges.size()); j++)
+                    for (int j = i; (j < i + disp && j < (int)ranges.size()); j++)
                     {
                         // RCLCPP_INFO (
                         //     this -> get_logger(),
@@ -147,8 +147,12 @@ private:
             double half_rad_angle_to_bubble_radius = atan(bubble / ranges[smallest_index]);
             int half_num_of_indices = round(half_rad_angle_to_bubble_radius / increment);
 
-            for (int i = smallest_index - half_num_of_indices; i < smallest_index + half_num_of_indices; i++){
-                if (i >= 0 && i < ranges.size()){
+            for (
+                int i = smallest_index - half_num_of_indices;
+                i < smallest_index + half_num_of_indices;
+                i++
+                ) {
+                if (i >= 0 && i < (int)ranges.size()){
                     ranges[i] = 0;
                 }
                 else continue;
@@ -316,7 +320,7 @@ private:
         // Steering_angle goes back to it's original purpose
 
         // If the whole scan is a gap, take that gap.
-        if (temp_gap.size() > gap_size - 1 && temp_gap.size() > largest_gap.size())
+        if ((int)temp_gap.size() > gap_size - 1 && temp_gap.size() > largest_gap.size())
         {
             largest_gap = temp_gap;
         }
