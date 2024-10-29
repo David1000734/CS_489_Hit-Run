@@ -90,11 +90,11 @@ public:
         double angle_clamp = this->get_parameter("angleclamp").as_double(); 
 
 
-        if (steer_angle > 24.0){
-            steer_angle = 24.0;
+        if (steer_angle > angle_clamp){
+            steer_angle = angle_clamp;
         }
-        else if (steer_angle < -24.0){
-            steer_angle = -24.0;
+        else if (steer_angle < -angle_clamp){
+            steer_angle = -angle_clamp;
         }
 
         // speedmult = 1 for already determined speeds.
