@@ -22,7 +22,12 @@ public:
         this->declare_parameter("speed", 0.0);
         this->declare_parameter("gap", 4);
         this->declare_parameter("dist", 5.0);
-        this->declare_parameter("change", 0.5);
+        this->declare_parameter("change", 1.5);
+        this->declare_parameter("imp", 1);
+        this->declare_parameter("point", 1);
+        this->declare_parameter("lowerX", 100);
+        this->declare_parameter("upperX", 980);
+        this->declare_parameter("bias", 50);
         std::string sim_car = "/odom"; // Physical Car
 
         if (this->get_parameter("mode").as_string() == "sim")
@@ -65,6 +70,16 @@ private:
         const double max_change = this->get_parameter("change").as_double(); // biggest change we are looking for when finding corners
         const double bubble = this->get_parameter("bubble").as_double();           // number of values we want to make 0 when we find a corner
         const double disp = this->get_parameter("disp").as_int();           // number of values we want to make 0 when we find a corner
+        int lower = this->get_parameter("lowerX").as_int();
+        int upper = this->get_parameter("upperX").as_int();
+
+        if (lower < 0) {
+            lower = 0;
+        }
+        // Nothing higher than range size
+        if (upper > (int)ranges.size()) {
+            upper = ranges.size();
+        }
 
         // Preprocess the LiDAR scan array. Expert implementation includes:
         // 1.Setting each value to the mean over some window
@@ -72,12 +87,12 @@ private:
 
         for (int i = 0; i < (int)ranges.size() - 1; i++)
         {
-            if (i < 180 || i > 900) {
+            if (i < lower || i > upper) {
                 ranges[i] = 0.0;
             }
 
             // All infinity values are changed to 30.0
-            if (std::isinf(ranges[i]))
+            if (ranges[i] > 30.0)
             {
                 ranges[i] = 30.0;
             }
@@ -147,16 +162,14 @@ private:
             double half_rad_angle_to_bubble_radius = atan(bubble / ranges[smallest_index]);
             int half_num_of_indices = round(half_rad_angle_to_bubble_radius / increment);
 
-            for (
-                int i = smallest_index - half_num_of_indices;
-                i < smallest_index + half_num_of_indices;
-                i++
-                ) {
+            for (int i = smallest_index - half_num_of_indices; i < smallest_index + half_num_of_indices; i++){
                 if (i >= 0 && i < (int)ranges.size()){
                     ranges[i] = 0;
                 }
                 else continue;
             }
+
+
         //             RCLCPP_INFO(this -> get_logger(),
         //                 "\nPre-processed Array: "
         //             );
@@ -214,15 +227,21 @@ private:
 
     int find_best_point(std::map<int, double> gap)
     {
+        const double point = this->get_parameter("point").as_int();           // number of values we want to make 0 when we find a corner
+        int bias = this->get_parameter("bias").as_int();
+
         // Between the end and begining / 2
+       
         int const center =
             (gap.rbegin()->first + gap.begin()->first) / 2;
         int index = center;
 
+        double deepest_point = -1.0;
         // Start_i & end_i are start and end indicies of max-gap range, respectively
 
         // Pick the best point by finding the furthest one
         std::map<int, double>::iterator itr;
+        if(point == 1){
         for (itr = gap.begin(); itr != gap.end(); itr++)
         {
             // Find the largest value AND the closest
@@ -242,6 +261,177 @@ private:
                 index = itr->first;
             }
         }
+        }
+        if (point == 2){
+           for (itr = gap.begin(); itr != gap.end(); itr++)
+            {
+                // Find the largest value AND the closest
+                // one to the center
+                // TODO: Depending on distance, we may want to target slighly off center
+                // Ex. If we are close, and aiming for a left turn,
+                // pick a point that is a little more left of the center
+                //
+                // If we are far, and aiming for a right turn,
+                // pick a point that is closer to the center.
+                // And vise versa
+                if ((itr->second >= gap[index]) &&
+                    abs(center - itr->first) >
+                        abs(center - index))
+                {
+                    // Take the index of the largest value
+                    index = itr->first;
+                }
+            }
+        }
+        if (point == 3){
+           for (itr = gap.begin(); itr != gap.end(); itr++)
+            {
+                // Find the largest value AND the closest
+                // one to the center
+                // TODO: Depending on distance, we may want to target slighly off center
+                // Ex. If we are close, and aiming for a left turn,
+                // pick a point that is a little more left of the center
+                //
+                // If we are far, and aiming for a right turn,
+                // pick a point that is closer to the center.
+                // And vise versa
+                if (itr->second >= deepest_point) 
+                {
+                    if (abs(center - itr->first) < abs(center - index)){
+                        deepest_point = itr->second;
+                       index = itr->first;
+                    }
+                    // Take the index of the largest value
+                   
+                }
+            }
+        }
+        if (point == 4){
+           for (itr = gap.begin(); itr != gap.end(); itr++)
+            {
+                // Find the largest value AND the closest
+                // one to the center
+                // TODO: Depending on distance, we may want to target slighly off center
+                // Ex. If we are close, and aiming for a left turn,
+                // pick a point that is a little more left of the center
+                //
+                // If we are far, and aiming for a right turn,
+                // pick a point that is closer to the center.
+                // And vise versa
+                if (itr->second >= deepest_point) 
+                {
+                    if (itr->second == deepest_point){
+                        if (abs(center - itr->first) < abs(center - index)){
+                            deepest_point = itr->second;
+                            index = itr->first;
+                            continue;
+                        }
+                    }
+                    // Take the index of the largest value
+                    deepest_point = itr->second;
+                    index = itr->first;
+                }
+            }
+        }
+        if (point == 5){
+           for (itr = gap.begin(); itr != gap.end(); itr++)
+        {
+            // Find the largest value AND the closest
+            // one to the center
+            // TODO: Depending on distance, we may want to target slighly off center
+            // Ex. If we are close, and aiming for a left turn,
+            // pick a point that is a little more left of the center
+            //
+            // If we are far, and aiming for a right turn,
+            // pick a point that is closer to the center.
+            // And vise versa
+            if ((itr->second >= gap[index]) &&
+                abs(center - itr->first) <
+                    abs(center - index))
+            {
+                // Take the index of the largest value
+                index = itr->first;
+            }
+        }
+        }
+        if (point == 6){
+           for (itr = gap.begin(); itr != gap.end(); itr++)
+            {
+                // Find the largest value AND the closest
+                // one to the center
+                // TODO: Depending on distance, we may want to target slighly off center
+                // Ex. If we are close, and aiming for a left turn,
+                // pick a point that is a little more left of the center
+                //
+                // If we are far, and aiming for a right turn,
+                // pick a point that is closer to the center.
+                // And vise versa
+                if ((itr->second >= gap[index]) &&
+                    (abs(center - itr->first) >
+                        abs(center - index)) && (abs(center - itr->first) < bias))
+                {
+                    // Take the index of the largest value
+                    index = itr->first;
+                }
+            }
+        }if (point == 7){
+            double max_depth = -1.0;
+            int max_index = -1;
+           for (itr = gap.begin(); itr != gap.end(); itr++)
+            {
+                // Find the largest value AND the closest
+                // one to the center
+                // TODO: Depending on distance, we may want to target slighly off center
+                // Ex. If we are close, and aiming for a left turn,
+                // pick a point that is a little more left of the center
+                //
+                // If we are far, and aiming for a right turn,
+                // pick a point that is closer to the center.
+                // And vise versa
+
+                if (itr->second >= max_depth) 
+                {
+                    // Take the index of the largest value
+                    max_depth = itr->second;
+                    max_index = itr->first;
+                }
+            }
+            index = max_index;
+        }
+        if (point == 8){
+            for (itr = gap.begin(); itr != gap.end(); itr++)
+        {
+            // Find the largest value AND the closest
+            // one to the center
+            // TODO: Depending on distance, we may want to target slighly off center
+            // Ex. If we are close, and aiming for a left turn,
+            // pick a point that is a little more left of the center
+            //
+            // If we are far, and aiming for a right turn,
+            // pick a point that is closer to the center.
+            // And vise versa
+            // double distance [];
+            // distance.append(itr->second);
+            double depth = 0.0;
+            if ((itr->second >= gap[index]) &&
+                abs(center - itr->first) <
+                    abs(center - index))
+            {
+                // Take the index of the largest value
+                index = itr->first;
+                depth = itr->second;
+            }
+        }
+            int quarter = center / 2;
+            int thrdquarter = center + quarter;
+
+            if (gap[index] < gap[quarter]){
+                index = quarter;
+            }
+            else if (gap[index] < gap[thrdquarter]){
+                index = thrdquarter;
+            }
+        }
 
         RCLCPP_INFO(
             this->get_logger(),
@@ -257,70 +447,210 @@ private:
         double distance_threshold = this->get_parameter("dist").as_double();
         int gap_size = this->get_parameter("gap").as_int();
         double speed = this->get_parameter("speed").as_double();
+        int implementation = this->get_parameter("imp").as_int();
+        double change_parameter = this->get_parameter("change").as_double(); // biggest change we are looking for when finding corners
+
+
 
         std::vector<float> range_data = this->preprocess_lidar(scan_msg->ranges, scan_msg -> angle_increment);
+        for (int i = 1000; i < range_data.size(); i++){
+            range_data[i] = 0.0;
+        }
         std::map<int, double> largest_gap; // Global Scope
         std::map<int, double> temp_gap;    // Local Scope
         double steering_angle = 0.0;
-        double largest_average = 0.0;
+        double largest_average = 0.0; // Average depth of largest gap.
 
         // Just to save a variable slot, will be using
-        // steering_angle as running sum for now
-        for (long unsigned int i = 0; i < range_data.size(); i++)
-        {
-            // Check the curent point, if it meets our requirements, do stuff
-            if (range_data[i] > distance_threshold)
+        if (implementation == 1){ //THIS IS THE LARGEST OR WIDEST GAP
+            for (long unsigned int i = 0; i < range_data.size(); i++)
             {
-                // Store current gap into temp
-                temp_gap[i] = range_data[i];
-
-                // Increment running sum
-                steering_angle += range_data[i];
-
-                // Check if gap is larger than minimum requirements
-            }
-            else if (((int)temp_gap.size()) > gap_size - 1)
-            {
-                // Get the average
-                steering_angle /= temp_gap.size();
-
-                // Is the current depth deeper than largest
-                if (steering_angle > largest_average)
+                // Check the curent point, if it meets our requirements, do stuff
+                if (range_data[i] > distance_threshold)
                 {
-                    // Clear before adding our new gap
-                    largest_gap = temp_gap;
+                    // Store current gap into temp
+                    temp_gap[i] = range_data[i];
 
-                // RCLCPP_INFO(
-                //     this->get_logger(),
-                //     "Gap %i\n",
-                //     i
-                // );
-
-                // for (auto it = temp_gap.begin(); it != temp_gap.end(); ++it)
-                //     {
-                //         RCLCPP_INFO(
-                //             this -> get_logger(),
-                //             "Found a gap: %i",
-                //             it -> first
-                //         );
-                //     }
+                    // Check if gap is larger than minimum requirements
                 }
+                else if (((int)temp_gap.size()) > gap_size - 1)
+                {
+                    // Is the current depth deeper than largest
+                    if ((int)temp_gap.size() > (int)largest_gap.size())
+                    {
+                        // Clear before adding our new gap
+                        largest_gap = temp_gap;
+                    }
 
-                // Reset average and clear running sum
-                largest_average = steering_angle;
-                steering_angle = 0;
-                temp_gap.clear();
+                    temp_gap.clear();
+                }
+                else
+                {
+                    // Does not meet distance and size requirements
+                    temp_gap.clear();
+                }
             }
-            else
+        }       
+        if (implementation == 2){ //THIS IS THE AVERAGE GAP
+            // Just to save a variable slot, will be using
+            // steering_angle as running sum for now
+            for (long unsigned int i = 0; i < range_data.size(); i++)
             {
-                // Does not meet distance and size requirements
-                temp_gap.clear();
+                // Check the curent point, if it meets our requirements, do stuff
+                if (range_data[i] > distance_threshold)
+                {
+                    // Store current gap into temp
+                    temp_gap[i] = range_data[i];
+
+                    // Increment running sum
+                    steering_angle += range_data[i];
+
+                    // Check if gap is larger than minimum requirements
+                }
+                else if (((int)temp_gap.size()) > gap_size - 1)
+                {
+                    // Get the average
+                    steering_angle /= temp_gap.size();
+
+                    // Is the current depth deeper than largest
+                    if (steering_angle > largest_average)
+                    {
+                        // Clear before adding our new gap
+                        largest_gap = temp_gap;
+                    }
+
+                    // Reset average and clear running sum
+                    largest_average = steering_angle;
+                    steering_angle = 0;
+                    temp_gap.clear();
+                }
+                else
+                {
+                    // Does not meet distance and size requirements
+                    temp_gap.clear();
+                }
             }
         }
+        if (implementation == 3){// THIS IS THE DEEPEST GAP
+            double deepest_point = 0.0;
+            for (long unsigned int i = 0; i < range_data.size(); i++)
+            {
+
+                // Check the curent point, if it meets our requirements, do stuff
+                if (range_data[i] > distance_threshold)
+                {
+                    // Store current gap into temp
+                    temp_gap[i] = range_data[i];
+
+                    // Check if gap is larger than minimum requirements
+                }
+                else if (((int)temp_gap.size()) > gap_size - 1)
+                {
+                    double temp_deepest_point = 0.0;
+                    for (auto point : temp_gap){
+                        if (point.second > temp_deepest_point){
+                            temp_deepest_point = point.second;
+                        }
+                    }
+                    // Is the current depth deeper than largest
+                    if (temp_deepest_point > deepest_point)
+                    {
+                        // Clear before adding our new gap/
+                        //deepest
+                        largest_gap = temp_gap;
+                    }
+
+                    temp_gap.clear();
+                }
+                else
+                {
+                    // Does not meet distance and size requirements
+                    temp_gap.clear();
+                }
+            }        
+        }
+        if (implementation == 4){ //THIS IS THE LARGEST OR WIDEST GAP WITH CHANGE CHECK
+            for (long unsigned int i = 0; i < range_data.size(); i++)
+            {
+                // Check the curent point, if it meets our requirements, do stuff
+                if (range_data[i] > distance_threshold && fabs(range_data[i] - range_data[i - 1]) < change_parameter)
+                {
+                    // Store current gap into temp
+                    temp_gap[i] = range_data[i];
+
+                    // Check if gap is larger than minimum requirements
+                }
+                else if (((int)temp_gap.size()) > gap_size - 1)
+                {
+                    // Is the current depth deeper than largest
+                    if ((int)temp_gap.size() > (int)largest_gap.size())
+                    {
+                        // Clear before adding our new gap
+                        largest_gap = temp_gap;
+                    }
+
+                    temp_gap.clear();
+                }
+                else
+                {
+                    // Does not meet distance and size requirements
+                    temp_gap.clear();
+                }
+            }
+        }
+        if (implementation == 5){ //THIS IS THE AVERAGE GAP WITH CHANGE CHECK
+            for (long unsigned int i = 1; i < range_data.size(); i++)
+            {
+                // Check the curent point, if it meets our requirements, do stuff
+                if (range_data[i] > distance_threshold && abs(range_data[i] - range_data[i - 1]) < change_parameter)
+                {
+                    // Store current gap into temp
+                    temp_gap[i] = range_data[i];
+
+                    // Increment running sum
+                    steering_angle += range_data[i];
+
+                    // Check if gap is larger than minimum requirements
+                }
+                else if (((int)temp_gap.size()) > gap_size - 1)
+                {
+                    // Get the average
+                    steering_angle /= temp_gap.size();
+
+                    // Is the current depth deeper than largest
+                    if (steering_angle > largest_average)
+                    {
+                        // Clear before adding our new gap
+                        largest_gap = temp_gap;
+                    }
+
+                    // Reset average and clear running sum
+                    largest_average = steering_angle;
+                    steering_angle = 0;
+                    temp_gap.clear();
+                }
+                else
+                {
+                    // Does not meet distance and size requirements
+                    temp_gap.clear();
+                }
+            }
+        }
+        if (implementation == 6){// gap is the entire scan
+            for (int i = 0; i < range_data.size(); i++){
+                largest_gap[i] = range_data[i];
+            }
+        }
+        // if (implementation == 7){
+        //     for (int i = 0; i < range_data.size(); i++){
+        //         if 
+        //         largest_gap[i] = range_data[i];
+        //     }
+        // }
         // Steering_angle goes back to it's original purpose
 
         // If the whole scan is a gap, take that gap.
-        if ((int)temp_gap.size() > gap_size - 1 && temp_gap.size() > largest_gap.size())
+        if ((int)temp_gap.size() > gap_size - 1 && (int)temp_gap.size() > (int)largest_gap.size())
         {
             largest_gap = temp_gap;
         }
@@ -348,15 +678,16 @@ private:
         steering_angle *= -1; // Turn away from walls.
 
         // Angle clamping
-        if (steering_angle > 20.0)
+        if (steering_angle > 24.0)
         {
-            steering_angle = 20.0;
+            steering_angle = 24.0;
         }
-        if (steering_angle < -20.0)
+        if (steering_angle < -24.0)
         {
-            steering_angle = -20.0;
+            steering_angle = -24.0;
         }
 
+         int bias = this->get_parameter("bias").as_int();
         // If the steering angle is between 0 degrees and 10 degrees, the car should drive at 1.5 meters per second.
         // If the steering angle is between 10 degrees and 20 degrees, the speed should be 1.0 meters per second.
         // Otherwise, the speed should be 0.5 meters per second.
@@ -369,23 +700,24 @@ private:
         else if ((steering_angle > 4.0000 && steering_angle <= 10.0000) ||
                  (steering_angle < -4.0000 && steering_angle >= -10.0000))
         {
+            
             // Speed is 75% of user specified speed.
-            speed += 2;
-            speed /= 2;
-
+            speed *= .75;
+            if (speed < 1.0){
+                speed = 1.0;
+            }
             // If less than 20 and greater than 10
         }
         else if ((steering_angle > 10.0000 && steering_angle < 20.0001) ||
                  (steering_angle < -10.0000 && steering_angle > -20.0001))
         {
-            speed += 1;
-            speed /= 2;
+            speed = 1.0;
             // Any other steering angle, speed is 0.5
         }
         else
         {
-            speed += 1;
-            speed /= 2;
+            speed = 1.0;
+            // speed = (speed+1)/2
         }
 
         // Process each LiDAR scan as per the Follow Gap algorithm & publish an AckermannDriveStamped Message
