@@ -16,19 +16,15 @@ public:
     ReactiveFollowGap() : Node("reactive_node")
     {
         // Initilize variables
-        this->declare_parameter("mode", "sim");
         this->declare_parameter("bubble", 0.1);
         this->declare_parameter("disp" , 5);
         this->declare_parameter("speed", 0.0);
         this->declare_parameter("gap", 4);
         this->declare_parameter("dist", 5.0);
         this->declare_parameter("change", 0.5);
-        std::string sim_car = "/odom"; // Physical Car
+        this->declare_parameter("lowerX", 180);
+        this->declare_parameter("upperX", 900);
 
-        if (this->get_parameter("mode").as_string() == "sim")
-        {
-            sim_car = "/ego_racecar/odom"; // Sim Car
-        }
         // ros2 launch src/gap_follow/gap_follow/gap_follow_launch.py speed:=1.0 disp:=10 dist:=1.5 gap:=20 change:=2.5 bubble:=0.24 mode:=sim
 
         /// TODO: create ROS subscribers and publishers
@@ -48,7 +44,7 @@ public:
                           std::placeholders::_1));
 
         RCLCPP_INFO(this->get_logger(),
-                    "Currently listening to %s.", sim_car.c_str());
+                    "Node Ready");
     }
 
 private:
@@ -64,7 +60,19 @@ private:
     {
         const double max_change = this->get_parameter("change").as_double(); // biggest change we are looking for when finding corners
         const double bubble = this->get_parameter("bubble").as_double();           // number of values we want to make 0 when we find a corner
-        const double disp = this->get_parameter("disp").as_int();           // number of values we want to make 0 when we find a corner
+        const int disp = this->get_parameter("disp").as_int();           // number of values we want to make 0 when we find a corner
+        int lower = this->get_parameter("lowerX").as_int();
+        int upper = this->get_parameter("upperX").as_int();
+
+        // No negative numbers
+        if (lower < 0) {
+            lower = 0;
+        }
+
+        // Nothing higher than range size
+        if (upper > (int)ranges.size()) {
+            upper = ranges.size();
+        }
 
         // Preprocess the LiDAR scan array. Expert implementation includes:
         // 1.Setting each value to the mean over some window
@@ -72,7 +80,7 @@ private:
 
         for (int i = 0; i < (int)ranges.size() - 1; i++)
         {
-            if (i < 180 || i > 900) {
+            if (i < lower || i > upper) {
                 ranges[i] = 0.0;
             }
 
@@ -243,12 +251,13 @@ private:
             }
         }
 
+/*
         RCLCPP_INFO(
             this->get_logger(),
             "center: %i\tindex: %i\nbegin: %i\tend: %i",
             center, index,
             abs(gap.begin()->first), abs(gap.rbegin()->first));
-
+*/
         return index;
     }
 

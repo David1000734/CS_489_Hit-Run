@@ -11,13 +11,14 @@ def generate_launch_description():
         package = "gap_follow",
         executable = "reactive_node",
         parameters = [
-            {'mode'  : LaunchConfiguration('mode', default = 'sim')},
             {'bubble': LaunchConfiguration('bubble', default = '0.1')},
             {'distp' : LaunchConfiguration('disp', default = '5')},
             {'speed' : LaunchConfiguration('speed', default = '2.0')},
             {'gap'   : LaunchConfiguration('gap', default = '4')},
             {'dist'  : LaunchConfiguration('dist', default = '5.0')},
-            {'change': LaunchConfiguration('change', default = '0.5')}
+            {'change': LaunchConfiguration('change', default = '0.5')},
+            {'lowerX': LaunchConfiguration('lowerX', default = '180')},
+            {'upperX': LaunchConfiguration('upperX', default = '900')}
         ]
     )
 
