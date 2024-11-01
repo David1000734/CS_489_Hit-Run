@@ -17,7 +17,12 @@ def generate_launch_description():
             {'speed' : LaunchConfiguration('speed', default = '2.0')},
             {'gap'   : LaunchConfiguration('gap', default = '4')},
             {'dist'  : LaunchConfiguration('dist', default = '5.0')},
-            {'change': LaunchConfiguration('change', default = '0.5')}
+            {'change': LaunchConfiguration('change', default = '0.5')},
+            {'imp': LaunchConfiguration('imp', default = '1')},
+            {'point': LaunchConfiguration('point', default = '1')},
+            {'lowerX': LaunchConfiguration('lowerX', default = '100')},
+            {'upperX': LaunchConfiguration('upperX', default = '980')},
+            {'bias': LaunchConfiguration('bias', default = '20')}
         ]
     )
 
