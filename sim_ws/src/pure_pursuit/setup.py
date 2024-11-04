@@ -13,10 +13,10 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='zzangupenn, Hongrui Zheng',
-    maintainer_email='zzang@seas.upenn.edu, billyzheng.bz@gmail.com',
-    description='f1tenth pure_pursuit',
-    license='MIT',
+    maintainer='root',
+    maintainer_email='root@todo.todo',
+    description='TODO: Package description',
+    license='TODO: License declaration',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [

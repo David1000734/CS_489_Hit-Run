@@ -17,8 +17,6 @@ class PurePursuit(Node):
     def __init__(self):
         super().__init__('pure_pursuit_node')
 
-        self.get_logger().info('Python Hey.')
-
         # Declare parameters
         self.declare_parameter('speed', float(0))
 
@@ -44,7 +42,7 @@ class PurePursuit(Node):
             10
         )
 
-        self.get_logger().info('Hello from Python.')
+        self.get_logger().info('Python pursuer saids hello :)')
 
     def acker_callback(self, acker_msg): 
 
@@ -60,7 +58,7 @@ class PurePursuit(Node):
 
         # TODO: publish drive message, don't forget to limit the steering angle.
 
-    def publish_ackerman(self, car_speed = 0.0, steering = 0.0, debug = false):
+    def publish_ackerman(self, car_speed = 0.0, steering = 0.0, debug = False):
         if (debug):
             self.get_logger().info(
                 "\n********** Try Publish **********\n" +
