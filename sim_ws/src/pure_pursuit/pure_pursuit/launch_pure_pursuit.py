@@ -11,10 +11,21 @@ def generate_launch_description():
         package = "pure_pursuit",
         executable = "pure_pursuit_node",
         parameters = [
+            {'mode' : LaunchConfiguration('mode', default = 'sim')},
             {'speed' : LaunchConfiguration('speed', default = '1.0')}
         ]
     )
 
-    ld.add_action(pkg_node)
+    pkg_marker = Node(
+        package = "pure_pursuit",
+        executable = "marker",
+        parameters = [
+            {'mode' : LaunchConfiguration('mode', default = 'sim')}
+        ]
+    )
+
+    # Working on marker, comment for now
+    # ld.add_action(pkg_node)
+    ld.add_action(pkg_marker)
 
     return ld

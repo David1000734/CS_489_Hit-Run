@@ -27,12 +27,12 @@ services:
     build: ./
     volumes: 
       - .:/sim_ws/src/f1tenth_gym_ros
-      - ./../../../race_setup.sh:/sim_ws/race_setup.sh:ro
+      - ./../../../race_setup.sh:/sim_ws/src/race_setup.sh:ro
       - ./../safety_node:/sim_ws/src/safety_node
       - ./../wall_follow:/sim_ws/src/wall_follow
       - ./../gap_follow:/sim_ws/src/gap_follow
       - ./../particle_filter:/sim_ws/src/particle_filter
-      # - ./../../range_libc:/sim_ws/range_libc
+      - ./../../range_libc:/sim_ws/range_libc
       - ./../pure_pursuit:/sim_ws/src/pure_pursuit
     environment:
       - DISPLAY=novnc:0.0
