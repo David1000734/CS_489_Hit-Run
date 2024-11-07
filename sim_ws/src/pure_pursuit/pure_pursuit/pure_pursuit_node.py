@@ -8,7 +8,9 @@ from sensor_msgs.msg import LaserScan
 from ackermann_msgs.msg import AckermannDriveStamped, AckermannDrive
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseStamped
-
+import math
+import os
+from ament_index_python.packages import get_package_share_directory
 
 # TODO CHECK: include needed ROS msg type headers and libraries
 
@@ -27,7 +29,7 @@ class PurePursuit(Node):
         self.declare_parameter('lookahead', float(1.0))
         self.declare_parameter('turbo', float(1.0))
         
-        mode = self.get_parameter('mode').get_parameter_value().as_string()
+        mode = self.get_parameter('mode').get_parameter_value().string_value
 
         if mode == 'sim':
             mode = '/ego_racecar/odom'
@@ -68,41 +70,65 @@ class PurePursuit(Node):
             'Odom is being ran.'
         )
 
-        self.get_logger().info(
-            'Value: %f' \
-            % pose_msg
-        )
+        # self.get_logger().info(
+        #     f"Value: {pose_msg}\n"
+        # )
 
         # Declare command-line parameters
-        lookahead = self.get_parameter('lookahead').get_parameter_value().as_double()
+        lookahead = self.get_parameter('lookahead').get_parameter_value().double_value
 
         # Position
-        position_x = pose_msg.pose.position.x
-        position_y = pose_msg.pose.position.y
-        position_z = pose_msg.pose.position.z
+        position_x = pose_msg.pose.pose.position.x
+        position_y = pose_msg.pose.pose.position.y
+        position_z = pose_msg.pose.pose.position.z
 
         # Orientation
-        orientation_x = pose_msg.pose.orientation.x
-        orientation_y = pose_msg.pose.orientation.y
-        orientation_z = pose_msg.pose.orientation.z
-        orientation_w = pose_msg.pose.orientation.w
+        orientation_x = pose_msg.pose.pose.orientation.x
+        orientation_y = pose_msg.pose.pose.orientation.y
+        orientation_z = pose_msg.pose.pose.orientation.z
+        orientation_w = pose_msg.pose.pose.orientation.w
 
         # temporary
         lateral_offset = 0.0
         #region WAYPOINT
 
         # TODO: translate vehicle frame to world frame
-        world_pose_msg = 10
+        world_pose_msg = Odometry()
+
+        relative_directory = "/sim_ws/src/pure_pursuit/pure_pursuit/"
 
         # TODO: find the current closest waypoint to track using methods mentioned in lecture
-        waypoint_array = self.readCSV("waypoints.csv")
+        waypoint_array = self.readCSV(relative_directory + "waypoints.csv")
+
+        self.get_logger().info(
+            'Test array here\n'
+        )
+        for waypoint in waypoint_array:
+            self.get_logger().info(
+                f"{waypoint}"
+            )
+
         closest_waypoint = self.find_nearest_waypoint(waypoint_array, world_pose_msg)
         #set following variables equal to closest_waypoint[] from index 0 to 3
         x_coordinate_of_waypoint, y_coordinate_of_waypoint, yaw, speed = closest_waypoint
 
+        self.get_logger().info(
+            'Passed nearest waypoint\n'
+        )
 
         # TODO: transform goal point to vehicle frame of reference
         #transform closest_waypoint to the vehicle frame of reference to calculate steering angle
+
+        angle = 45
+        # create a temp matrix for multiplication
+        temp_matrix = np.array([x_coordinate_of_waypoint], [y_coordinate_of_waypoint])
+
+        # create the transform matrix
+        rotate_matrix = np.array([[math.cos(angle) , -math.sin(angle)],
+                                     [math.sin(angle) , math.cos(angle)]])
+
+        # multiply
+        result_matrix = np.dot(rotate_matrix, temp_matrix)
 
 
         # TODO: calculate curvature/steering angle
@@ -118,7 +144,7 @@ class PurePursuit(Node):
             steering_angle = -24.0
 
         
-        turbo = self.get_parameter('turbo').get_parameter_value().as_double()
+        turbo = self.get_parameter('turbo').get_parameter_value().double_value
         #region SPEED
         if steering_angle >= -4.0000 & steering_angle <= 4.0000:
             # Speed will be specified by the launch parameters
@@ -147,7 +173,7 @@ class PurePursuit(Node):
         pass
 
     #region PUBLISH
-    def publish_ackerman(self, car_speed = 0.0, steering = 0.0, debug = False):
+    def publish_ackerman(self, car_speed: float = 0.0, steering: float = 0.0, debug: bool = False):
         if (debug):
             self.get_logger().info(
                 "\n********** Try Publish **********\n" +
@@ -176,21 +202,21 @@ class PurePursuit(Node):
         return array_of_waypoints
 
     def create_pose_stamped(self):
-        pose_stamped = PoseStamped()
+        pose_stamped = Odometry()
 
         # Set the header
         # pose_stamped.header.stamp = rospy.Time.now()
         # pose_stamped.header.frame_id = "base_link"  # Replace with the appropriate frame ID
 
         # Set the pose
-        pose_stamped.pose.position.x = 1.0
-        pose_stamped.pose.position.y = 2.0
-        pose_stamped.pose.position.z = 3.0
+        pose_stamped.pose.pose.position.x = 1.0
+        pose_stamped.pose.pose.position.y = 2.0
+        pose_stamped.pose.pose.position.z = 3.0
 
-        pose_stamped.pose.orientation.x = 0.0
-        pose_stamped.pose.orientation.y = 0.0
-        pose_stamped.pose.orientation.z = 0.0
-        pose_stamped.pose.orientation.w = 1.0
+        pose_stamped.pose.pose.orientation.x = 0.0
+        pose_stamped.pose.pose.orientation.y = 0.0
+        pose_stamped.pose.pose.orientation.z = 0.0
+        pose_stamped.pose.pose.orientation.w = 1.0
 
         return pose_stamped
 
@@ -206,12 +232,11 @@ class PurePursuit(Node):
         minimum_dist = 1000.0
         for waypoint in waypoint_array:
             # if least distance
-            waypoint_x = waypoint[0]
-            # some sort of check to see if its ahead of us
+            waypoint_x = float(waypoint[0])
+            waypoint_y = float(waypoint[1])
 
-            waypoint_y = waypoint[1]
-            x2_x1_square = pow(waypoint_x - world_pose_msg.pose.position.x, 2)
-            y2_y1_square = pow(waypoint_y - world_pose_msg.pose.position.y, 2)
+            x2_x1_square = pow(waypoint_x - world_pose_msg.pose.pose.position.x, 2)
+            y2_y1_square = pow(waypoint_y - world_pose_msg.pose.pose.position.y, 2)
             temp_dist = pow(x2_x1_square + y2_y1_square, 0.5)
             if (temp_dist < minimum_dist):
                 closest_waypoint = waypoint

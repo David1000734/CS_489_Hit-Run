@@ -25,7 +25,7 @@ def generate_launch_description():
     )
 
     # Working on marker, comment for now
-    # ld.add_action(pkg_node)
-    ld.add_action(pkg_marker)
+    ld.add_action(pkg_node)
+    # ld.add_action(pkg_marker)
 
     return ld
