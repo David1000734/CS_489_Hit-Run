@@ -28,8 +28,10 @@ class PurePursuit(Node):
         self.declare_parameter('speed', float(1.0))
         self.declare_parameter('lookahead', float(1.0))
         self.declare_parameter('turbo', float(1.0))
-        
+
         mode = self.get_parameter('mode').get_parameter_value().string_value
+        self.turbo = self.get_parameter('turbo').get_parameter_value().double_value
+        self.lookahead = self.get_parameter('lookahead').get_parameter_value().double_value
 
         if mode == 'sim':
             mode = '/ego_racecar/odom'
@@ -58,7 +60,7 @@ class PurePursuit(Node):
             10
         )
 
-        self.get_logger().info('Python pursuer saids hello :)')
+        self.get_logger().info(f'Python listening to: {mode}')
 
     def acker_callback(self, acker_msg): 
 
@@ -66,16 +68,9 @@ class PurePursuit(Node):
 
     #region POSE
     def pose_callback(self, pose_msg):
-        self.get_logger().info(
-            'Odom is being ran.'
-        )
-
         # self.get_logger().info(
         #     f"Value: {pose_msg}\n"
         # )
-
-        # Declare command-line parameters
-        lookahead = self.get_parameter('lookahead').get_parameter_value().double_value
 
         # Position
         position_x = pose_msg.pose.pose.position.x
@@ -121,21 +116,20 @@ class PurePursuit(Node):
 
         angle = 45
         # create a temp matrix for multiplication
-        temp_matrix = np.array([x_coordinate_of_waypoint], [y_coordinate_of_waypoint])
+        temp_matrix = np.array([[x_coordinate_of_waypoint], [y_coordinate_of_waypoint]], dtype=float)
 
         # create the transform matrix
         rotate_matrix = np.array([[math.cos(angle) , -math.sin(angle)],
-                                     [math.sin(angle) , math.cos(angle)]])
+                                     [math.sin(angle) , math.cos(angle)]], dtype=float)
 
         # multiply
         result_matrix = np.dot(rotate_matrix, temp_matrix)
-
 
         # TODO: calculate curvature/steering angle
 
         #region STEER ANGLE
         #steer_angle = (2 * |y|) / lookeahead^2
-        steering_angle = (2 * abs(lateral_offset)) / pow(lookahead, 2)
+        steering_angle = (2 * abs(lateral_offset)) / pow(self.lookahead, 2)
 
         # TODO: publish drive message, don't forget to limit the steering angle.
         if (steering_angle > 24.0):
@@ -143,13 +137,11 @@ class PurePursuit(Node):
         elif (steering_angle < -24.0):
             steering_angle = -24.0
 
-        
-        turbo = self.get_parameter('turbo').get_parameter_value().double_value
         #region SPEED
-        if steering_angle >= -4.0000 & steering_angle <= 4.0000:
+        if ((steering_angle >= -4.0000) & (steering_angle <= 4.0000)):
             # Speed will be specified by the launch parameters
             # If less than 20 and greater than 10
-            speed *= turbo
+            speed *= self.turbo
         elif ((steering_angle > 4.0000 & steering_angle <= 8.0000) |
                  (steering_angle < -4.0000 & steering_angle >= -8.0000)):
             speed = speed
@@ -183,8 +175,8 @@ class PurePursuit(Node):
 
         ack_msg = AckermannDriveStamped()
 
-        ack_msg.drive.speed = float(car_speed)
-        ack_msg.drive.steering_angle = float(steering)
+        ack_msg.drive.speed = car_speed
+        ack_msg.drive.steering_angle = steering
         self.acker_publisher.publish(ack_msg)
 
         if (debug):
@@ -241,7 +233,8 @@ class PurePursuit(Node):
             if (temp_dist < minimum_dist):
                 closest_waypoint = waypoint
 
-        return closest_waypoint
+        # Recreate the list as a list of float values instead of str
+        return [float(i) for i in closest_waypoint]
 
     def shutdown(self):
         self.get_logger().info('Pursuit node ended itself.')
