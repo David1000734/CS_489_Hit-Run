@@ -11,6 +11,8 @@ from geometry_msgs.msg import PoseStamped
 import math
 import os
 from ament_index_python.packages import get_package_share_directory
+from tf_transformations import euler_from_quaternion
+
 
 # TODO CHECK: include needed ROS msg type headers and libraries
 
@@ -113,23 +115,32 @@ class PurePursuit(Node):
 
         # TODO: transform goal point to vehicle frame of reference
         #transform closest_waypoint to the vehicle frame of reference to calculate steering angle
+        quaternion = (orientation_x, orientation_y, orientation_z, orientation_w)
 
-        angle = 45
+        euler = euler_from_quaternion(quaternion)
+
+        #grab the rotation
+        test_yaw = euler[2]
+
         # create a temp matrix for multiplication
-        temp_matrix = np.array([[x_coordinate_of_waypoint], [y_coordinate_of_waypoint]], dtype=float)
+        temp_matrix = np.array([[x_coordinate_of_waypoint], [y_coordinate_of_waypoint]])
 
         # create the transform matrix
-        rotate_matrix = np.array([[math.cos(angle) , -math.sin(angle)],
-                                     [math.sin(angle) , math.cos(angle)]], dtype=float)
+        rotate_matrix = np.array([[math.cos(test_yaw) , -math.sin(test_yaw)],
+                                     [math.sin(test_yaw) , math.cos(test_yaw)]])
 
         # multiply
         result_matrix = np.dot(rotate_matrix, temp_matrix)
 
+        new_x = result_matrix[0, 0]
+        new_y = result_matrix[1, 0]
+
         # TODO: calculate curvature/steering angle
+        lateral_offset = new_y
 
         #region STEER ANGLE
         #steer_angle = (2 * |y|) / lookeahead^2
-        steering_angle = (2 * abs(lateral_offset)) / pow(self.lookahead, 2)
+        steering_angle = (2 * lateral_offset) / pow(self.lookahead, 2)
 
         # TODO: publish drive message, don't forget to limit the steering angle.
         if (steering_angle > 24.0):
