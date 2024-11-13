@@ -143,98 +143,36 @@ class PurePursuit(Node):
 
     #region POSE
     def pose_callback(self, pose_msg):
-        # self.get_logger().info(
-        #     f"Value: {pose_msg}\n"
-        # )
-
-        # Position
-        position_x = pose_msg.pose.pose.position.x
-        position_y = pose_msg.pose.pose.position.y
-        position_z = pose_msg.pose.pose.position.z
-
-        # Orientation
-        orientation_x = pose_msg.pose.pose.orientation.x
-        orientation_y = pose_msg.pose.pose.orientation.y
-        orientation_z = pose_msg.pose.pose.orientation.z
-        orientation_w = pose_msg.pose.pose.orientation.w
-
-        # temporary
-        lateral_offset = 0.0
-        #region WAYPOINT
-
-        # TODO: translate vehicle frame to world frame
-        world_pose_msg = pose_msg
-
         relative_directory = "/sim_ws/src/pure_pursuit/pure_pursuit/"
 
-        # TODO: find the current closest waypoint to track using methods mentioned in lecture
         waypoint_array = self.readCSV(relative_directory + "waypoints.csv")
 
-        # self.get_logger().info(
-        #     'Test array here\n'
-        # )
-        # for waypoint in waypoint_array:
-        #     self.get_logger().info(
-        #         f"{waypoint}"
-        #     )
+        
+        vehicle_pos = np.array([pose_msg.pose.pose.position.x, pose_msg.pose.pose.position.y, 0])
+        vehicle_orientation = np.array([pose_msg.pose.pose.orientation.w,
+                                        pose_msg.pose.pose.orientation.x,
+                                        pose_msg.pose.pose.orientation.y,
+                                        pose_msg.pose.pose.orientation.z])
 
-        list_of_waypoints_in_car_frame = self.convert_waypoints_to_car_frame(waypoint_array, world_pose_msg)
-        result_matrix = self.find_nearest_waypoint_in_car_frame(list_of_waypoints_in_car_frame, world_pose_msg)
+        # Calculate distances to waypoints and filter by LOOKAHEAD_DISTANCE
+        within_lookahead_points = self.find_nearest_waypoint(waypoint_array, vehicle_pos)
 
-        # closest_waypoint = self.find_nearest_waypoint(waypoint_array, world_pose_msg)
-        #set following variables equal to closest_waypoint[] from index 0 to 3
-        # x_coordinate_of_waypoint, y_coordinate_of_waypoint, yaw, speed = closest_waypoint
+        # Transform waypoints to vehicle frame
+        rotation_inv = vehicle_orientation * [1, -1, -1, -1] / np.sum(vehicle_orientation ** 2)
+        waypoints_vehicle_frame = self.transform_waypoints(vehicle_pos, within_lookahead_points, rotation_inv)
 
-        self.get_logger().info(
-            'Passed nearest waypoint: %s\n'% 
-            str(result_matrix)
-        )
+        # Select target waypoint (furthest within lookahead in front of vehicle)
+        front_waypoints = waypoints_vehicle_frame[waypoints_vehicle_frame[:, 0] > 0]
+        if not len(front_waypoints):
+            return
+        target_waypoint = front_waypoints[np.argmax(front_waypoints[:, 0])]
 
+        # Compute steering angle and velocity
+        dist_to_target = np.linalg.norm(target_waypoint)
+        curvature = 2 * abs(target_waypoint[1]) / dist_to_target ** 2
+        steering_angle = np.clip(curvature * 0.5 * np.sign(target_waypoint[1]), -24.0, 24.0)
 
-        # # TODO: transform goal point to vehicle frame of reference
-        # #transform closest_waypoint to the vehicle frame of reference to calculate steering angle
-        # quaternion = (orientation_x, orientation_y, orientation_z, orientation_w)
-
-        # euler = euler_from_quaternion(quaternion)
-
-        # #grab the rotation
-        # test_yaw = euler[2]
-
-        # # create a temp matrix for multiplication
-        # temp_matrix = np.array([[x_coordinate_of_waypoint], [y_coordinate_of_waypoint]])
-
-        # # create the transform matrix
-        # rotate_matrix = np.array([[math.cos(test_yaw) , -math.sin(test_yaw)],
-        #                              [math.sin(test_yaw) , math.cos(test_yaw)]])
-
-        # # multiply
-        # result_matrix = np.dot(rotate_matrix, temp_matrix)
-
-        # self.get_logger().info(
-        #     str(result_matrix.shape)
-        # )
-
-        new_x_in_car_frame = result_matrix[0]
-        new_y_in_car_frame = result_matrix[1]
-
-        self.get_logger().info(
-            'Pointing towards: %f, %f\n'% 
-            (new_x_in_car_frame, new_y_in_car_frame)
-        )
-
-        # TODO: calculate curvature/steering angle
-        lateral_offset = new_y_in_car_frame
-        # lateral_offset *= -1
-
-        #region STEER ANGLE
-        #steer_angle = (2 * |y|) / lookeahead^2
-        steering_angle = (2 * (lateral_offset)) / pow(self.lookahead, 2)
-
-        # TODO: publish drive message, don't forget to limit the steering angle.
-        if (steering_angle > 24.0):
-            steering_angle = 24.0
-        elif (steering_angle < -24.0):
-            steering_angle = -24.0
+        self.visualize_target_waypoint([target_waypoint[0], target_waypoint[1]])
 
         #region SPEED
         if ((steering_angle >= -4.0000) and (steering_angle <= 4.0000)):
@@ -268,6 +206,13 @@ class PurePursuit(Node):
         self.publish_ackerman(self.speed, steering_angle, False)
         pass
 
+    def transform_waypoints(self, vehicle_pos, within_lookahead_points, rotation_inv):
+        waypoints_translated = within_lookahead_points - vehicle_pos
+        rotation_inv_w, rotation_inv_vec = rotation_inv[0], rotation_inv[1:]
+        t = np.cross(2 * rotation_inv_vec, waypoints_translated)
+        return waypoints_translated + rotation_inv_w * t + np.cross(rotation_inv_vec, t)
+
+
     #region PUBLISH
     def publish_ackerman(self, car_speed: float = 0.0, steering: float = 0.0, debug: bool = False):
         if (debug):
@@ -292,9 +237,13 @@ class PurePursuit(Node):
     # Publish_ackerman, END
 
     def readCSV(self, directory):
-        #./ for current directory. 
-        #../ to go back a directory
-        array_of_waypoints = list(csv.reader(open(directory)))
+        array_of_waypoints = []
+        with open(directory, 'r') as file:
+            reader = csv.reader(file)
+            for row in reader:
+                # Convert each item in the row to a float
+                waypoint = [float(value) for value in row]
+                array_of_waypoints.append(waypoint)
         return array_of_waypoints
 
     #region Convert
@@ -349,6 +298,7 @@ class PurePursuit(Node):
             if (temp_dist < self.lookahead):
                 if (temp_dist > minimum_dist):
                     closest_waypoint = waypoint
+                    minimum_dist = temp_dist
 
         # Recreate the list as a list of float values instead of str
         self.get_logger().info("looking X: %f\looking Y: %f" %
@@ -356,35 +306,24 @@ class PurePursuit(Node):
         return [float(i) for i in closest_waypoint]
 
     #region minDist
-    def find_nearest_waypoint(self, waypoint_array, world_pose_msg):
-        # self.get_logger().info("World Pose: %s" % str(world_pose_msg))
-        
-        closest_waypoint = waypoint_array[0]
+    def find_nearest_waypoint(self, waypoint_array, vehicle_pos):
+        vehicle_pos_x = vehicle_pos[0]
+        vehicle_pos_y = vehicle_pos[1]
+        within_lookahead = []
 
-        # Car's orientation (assuming quaternion is converted to yaw)
-        
-        minimum_dist = 10.0
-        for idx, waypoint in enumerate(waypoint_array):
-            #self.get_logger().info("Waypoint: %s" % waypoint)
-
-            # if least distance
+        for waypoint in waypoint_array:
             waypoint_x = float(waypoint[0])
             waypoint_y = float(waypoint[1])
 
-            # self.get_logger().info("x_waypoint: %f\ty_waypoint: %f" % (waypoint_x, waypoint_y))
-
-            x2_x1_square = pow(waypoint_x - world_pose_msg.pose.pose.position.x, 2)
-            y2_y1_square = pow(waypoint_y - world_pose_msg.pose.pose.position.y, 2)
+            x2_x1_square = pow(waypoint_x - vehicle_pos_x, 2)
+            y2_y1_square = pow(waypoint_y - vehicle_pos_y, 2)
             temp_dist = pow(x2_x1_square + y2_y1_square, 0.5)
 
             # self.get_logger().info("temp_dist: %f" % temp_dist)
+            if (temp_dist < self.lookahead):
+               within_lookahead.append([waypoint_x, waypoint_y, 0])
 
-            if (temp_dist < minimum_dist or
-                (idx == len(waypoint_array) - 1) and (closest_waypoint == waypoint_array[0])):
-                closest_waypoint = waypoint
-
-        # Recreate the list as a list of float values instead of str
-        return [float(i) for i in closest_waypoint]
+        return within_lookahead
 
     def shutdown(self):
         self.get_logger().info('Pursuit node ended itself.')
