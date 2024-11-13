@@ -12,7 +12,10 @@ def generate_launch_description():
         executable = "pure_pursuit_node",
         parameters = [
             {'mode' : LaunchConfiguration('mode', default = 'sim')},
-            {'speed' : LaunchConfiguration('speed', default = '1.0')}
+            {'speed' : LaunchConfiguration('speed', default = '1.0')},
+            {'x_neg' : LaunchConfiguration('x_neg', default = '1.0')},
+            {'y_neg' : LaunchConfiguration('y_neg', default = '1.0')}
+
         ]
     )
 
