@@ -4,16 +4,10 @@ from rclpy.node import Node
 import csv
 
 import numpy as np
-from sensor_msgs.msg import LaserScan
-from ackermann_msgs.msg import AckermannDriveStamped, AckermannDrive
+from ackermann_msgs.msg import AckermannDriveStamped
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import PoseStamped
 import math
-import os
-from ament_index_python.packages import get_package_share_directory
-from tf_transformations import euler_from_quaternion
 from visualization_msgs.msg import Marker, MarkerArray
-
 
 # TODO CHECK: include needed ROS msg type headers and libraries
 
@@ -31,8 +25,6 @@ class PurePursuit(Node):
         self.declare_parameter('speed', float(1.0))
         self.declare_parameter('lookahead', float(1.0))
         self.declare_parameter('turbo', float(1.0))
-        self.declare_parameter('x_neg', float(-1.0))
-        self.declare_parameter('y_neg', float(-1.0))
 
 
         mode = self.get_parameter('mode').get_parameter_value().string_value
@@ -40,9 +32,6 @@ class PurePursuit(Node):
         self.lookahead = self.get_parameter('lookahead').get_parameter_value().double_value
         self.speed = self.get_parameter('speed').get_parameter_value().double_value
         self.default_speed = self.speed
-        self.x_neg = self.get_parameter('x_neg').get_parameter_value().double_value
-        self.y_neg = self.get_parameter('y_neg').get_parameter_value().double_value
-
 
         if mode == 'sim':
             mode = '/ego_racecar/odom'
@@ -54,13 +43,6 @@ class PurePursuit(Node):
         self.acker_publisher = self.create_publisher(
             AckermannDriveStamped,
             '/drive',
-            10
-        )
-
-        self.acker_subscription = self.create_subscription(
-            AckermannDriveStamped,
-            '/drive',
-            self.acker_callback,
             10
         )
 
@@ -81,10 +63,6 @@ class PurePursuit(Node):
 
         self.get_logger().info(f'Python listening to: {mode}')
 
-    def acker_callback(self, acker_msg): 
-
-        pass
-
     #region Visualize Waypoint
     def visualize_target_waypoint(self, waypoint):
         marker = Marker()
@@ -101,13 +79,18 @@ class PurePursuit(Node):
         marker.pose.orientation.y = 0.0
         marker.pose.orientation.z = 0.0
         marker.pose.orientation.w = 1.0
-        marker.scale.x = 0.11
-        marker.scale.y = 0.11
-        marker.scale.z = 0.11
+        marker.scale.x = 0.5
+        marker.scale.y = 0.5
+        marker.scale.z = 0.5
         marker.color.r = 1.0
         marker.color.g = 0.5
         marker.color.b = 0.0
         marker.color.a = 1.0
+
+        # self.get_logger().info(
+        #     "Marker X: %f\tMarker Y: %f" %
+        #     (waypoint[0], waypoint[1])
+        # )
 
         self.visualize_marker_pub.publish(marker)
 
@@ -147,7 +130,6 @@ class PurePursuit(Node):
 
         waypoint_array = self.readCSV(relative_directory + "waypoints.csv")
 
-        
         vehicle_pos = np.array([pose_msg.pose.pose.position.x, pose_msg.pose.pose.position.y, 0])
         vehicle_orientation = np.array([pose_msg.pose.pose.orientation.w,
                                         pose_msg.pose.pose.orientation.x,
@@ -155,24 +137,46 @@ class PurePursuit(Node):
                                         pose_msg.pose.pose.orientation.z])
 
         # Calculate distances to waypoints and filter by LOOKAHEAD_DISTANCE
+        # Selecting all waypoints within lookahead for transformation to car frame
         within_lookahead_points = self.find_nearest_waypoint(waypoint_array, vehicle_pos)
 
-        # Transform waypoints to vehicle frame
+        # w is the real scalar value
+        # Calculate inverse quaternion by
+        # normalizing it, find it's conjunction, then divide by the sum^2
+        # (w, x, y, z) --> (w, -x, -y, -z)      Inv_Q
+        #   w^2 + x^2 + y^2 + z^2       Denominator
+        # Inverse Q = Inv_Q/Denominator
         rotation_inv = vehicle_orientation * [1, -1, -1, -1] / np.sum(vehicle_orientation ** 2)
+
         waypoints_vehicle_frame = self.transform_waypoints(vehicle_pos, within_lookahead_points, rotation_inv)
 
         # Select target waypoint (furthest within lookahead in front of vehicle)
+        # Get all waypoints with x values greater than 0
         front_waypoints = waypoints_vehicle_frame[waypoints_vehicle_frame[:, 0] > 0]
+        # error checking waypoints greater than 0
         if not len(front_waypoints):
             return
-        target_waypoint = front_waypoints[np.argmax(front_waypoints[:, 0])]
 
+        target_idx = np.argmax(front_waypoints[:, 0])
+
+        # picks biggest x value (Pick the furthest waypoint) 
+        # arg max returns index of waypoint with greatest x value 
+        target_waypoint = front_waypoints[target_idx]
+        
         # Compute steering angle and velocity
+        # uses distance to waypoint instead of lookahead
         dist_to_target = np.linalg.norm(target_waypoint)
-        curvature = 2 * abs(target_waypoint[1]) / dist_to_target ** 2
-        steering_angle = np.clip(curvature * 0.5 * np.sign(target_waypoint[1]), -24.0, 24.0)
+        steering_angle = 2 * abs(target_waypoint[1]) / dist_to_target ** 2
 
-        self.visualize_target_waypoint([target_waypoint[0], target_waypoint[1]])
+        #arc
+        steering_angle = steering_angle * 0.5 * np.sign(target_waypoint[1])
+        #MARKER
+
+        #angle cut off
+        if (steering_angle > 24.0):
+            steering_angle = 24.0
+        if (steering_angle < -24.0):
+            steering_angle = -24.0
 
         #region SPEED
         if ((steering_angle >= -4.0000) and (steering_angle <= 4.0000)):
@@ -206,11 +210,26 @@ class PurePursuit(Node):
         self.publish_ackerman(self.speed, steering_angle, False)
         pass
 
+
     def transform_waypoints(self, vehicle_pos, within_lookahead_points, rotation_inv):
+        # translation, place origin onto vehicle
+        # if the vehicle is at (3, 2) and wp is (5, 6)
+        # local frame is now (2, 4)
         waypoints_translated = within_lookahead_points - vehicle_pos
-        rotation_inv_w, rotation_inv_vec = rotation_inv[0], rotation_inv[1:]
-        t = np.cross(2 * rotation_inv_vec, waypoints_translated)
-        return waypoints_translated + rotation_inv_w * t + np.cross(rotation_inv_vec, t)
+        way_points_x_y = waypoints_translated[:, :-1] 
+
+        # rotation, rotate to where the car is looking
+        orientation_w = rotation_inv[0]
+        orientation_z = rotation_inv[-1]
+
+        theta = 2 * np.arctan2(orientation_z, orientation_w)
+        cos_theta = math.cos(theta)
+        sin_theta = math.sin(theta)
+        rotation_matrix = np.array([[cos_theta, -sin_theta], [sin_theta, cos_theta]])
+
+        waypoints_rotated = np.dot(way_points_x_y, rotation_matrix.T)
+
+        return waypoints_rotated
 
 
     #region PUBLISH
@@ -246,71 +265,11 @@ class PurePursuit(Node):
                 array_of_waypoints.append(waypoint)
         return array_of_waypoints
 
-    #region Convert
-    def convert_waypoints_to_car_frame(self, waypoint_array, world_pose_msg):
-
-        orientation_z = world_pose_msg.pose.pose.orientation.z #ros2 odometry message of car
-
-        position_x = world_pose_msg.pose.pose.position.x #ros2 odometry message of car
-        position_y = world_pose_msg.pose.pose.position.y #ros2 odometry message of car
-
-        points_to_point = []
-        for waypoint in waypoint_array:
-            x_coordinate_of_waypoint = float(waypoint[0]) #x value of waypoint
-            y_coordinate_of_waypoint = float(waypoint[1]) #y value of waypoint
-          
-            # test_yaw = yaw
-            test_yaw = (math.asin(orientation_z)) * 2
-            test_yaw = orientation_z
-            
-            new_x = (x_coordinate_of_waypoint * math.cos(test_yaw) - y_coordinate_of_waypoint * math.sin(test_yaw)) - position_x
-            new_y = (x_coordinate_of_waypoint * math.sin(test_yaw) + y_coordinate_of_waypoint * math.cos(test_yaw)) - position_y
-            new_x *= self.x_neg
-            new_y *= self.y_neg
-
-            
-
-            if (new_x > 0.0):
-                points_to_point.append([new_x, new_y])
-        return points_to_point
-
-    #region Nearest
-    def find_nearest_waypoint_in_car_frame(self, list_of_waypoints_in_car_frame, world_pose_msg):
-        closest_waypoint = [0,0]
-        
-        minimum_dist = 0
-        for waypoint in list_of_waypoints_in_car_frame:
-            waypoint_x = float(waypoint[0])
-            waypoint_y = float(waypoint[1])
-
-            self.get_logger().info("looking X: %f\looking Y: %f" %
-                                   (waypoint_x, waypoint_y))
-            
-            if (waypoint_x == 0 and waypoint_y == 0):
-                continue
-
-
-            x2_x1_square = pow(waypoint_x - 0, 2)
-            y2_y1_square = pow(waypoint_y - 0, 2)
-            temp_dist = pow(x2_x1_square + y2_y1_square, 0.5)
-
-            # self.get_logger().info("temp_dist: %f" % temp_dist)
-            if (temp_dist < self.lookahead):
-                if (temp_dist > minimum_dist):
-                    closest_waypoint = waypoint
-                    minimum_dist = temp_dist
-
-        # Recreate the list as a list of float values instead of str
-        self.get_logger().info("looking X: %f\looking Y: %f" %
-                                   (closest_waypoint[0], closest_waypoint[1]))
-        return [float(i) for i in closest_waypoint]
-
     #region minDist
     def find_nearest_waypoint(self, waypoint_array, vehicle_pos):
         vehicle_pos_x = vehicle_pos[0]
         vehicle_pos_y = vehicle_pos[1]
         within_lookahead = []
-
         for waypoint in waypoint_array:
             waypoint_x = float(waypoint[0])
             waypoint_y = float(waypoint[1])
