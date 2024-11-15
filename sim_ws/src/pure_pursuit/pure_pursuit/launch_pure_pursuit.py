@@ -3,6 +3,7 @@ from launch_ros.actions import Node
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, TextSubstitution
 from launch.conditions import IfCondition
+import os
 
 def generate_launch_description():
     ld = LaunchDescription()
@@ -12,7 +13,9 @@ def generate_launch_description():
         executable = "pure_pursuit_node",
         parameters = [
             {'mode' : LaunchConfiguration('mode', default = 'sim')},
-            {'speed' : LaunchConfiguration('speed', default = '1.0')}
+            {'speed' : LaunchConfiguration('speed', default = '1.0')},
+            {'path' : LaunchConfiguration('path', default = "pure_pursuit/pure_pursuit/")},
+            {'filename' : LaunchConfiguration('filename', default = "waypoints.csv")},
         ]
     )
 

@@ -8,6 +8,7 @@ from ackermann_msgs.msg import AckermannDriveStamped
 from nav_msgs.msg import Odometry
 import math
 from visualization_msgs.msg import Marker, MarkerArray
+import os
 
 # TODO CHECK: include needed ROS msg type headers and libraries
 
@@ -25,6 +26,8 @@ class PurePursuit(Node):
         self.declare_parameter('speed', float(1.0))
         self.declare_parameter('lookahead', float(1.0))
         self.declare_parameter('turbo', float(1.0))
+        self.declare_parameter('path', "pure_pursuit/pure_pursuit/")
+        self.declare_parameter('filename', "waypoints.csv")
 
 
         mode = self.get_parameter('mode').get_parameter_value().string_value
@@ -32,6 +35,8 @@ class PurePursuit(Node):
         self.lookahead = self.get_parameter('lookahead').get_parameter_value().double_value
         self.speed = self.get_parameter('speed').get_parameter_value().double_value
         self.default_speed = self.speed
+        self.path = self.get_parameter('path').get_parameter_value().string_value
+        self.filename = self.get_parameter('filename').get_parameter_value().string_value
 
         if mode == 'sim':
             mode = '/ego_racecar/odom'
@@ -56,7 +61,17 @@ class PurePursuit(Node):
         self.visualize_marker_array_pub = self.create_publisher(MarkerArray, '/visualization_marker_array', 10)
         self.visualize_marker_pub = self.create_publisher(Marker, '/visualization_marker', 10)
 
-        wp = np.loadtxt('/sim_ws/src/pure_pursuit/pure_pursuit/waypoints.csv', delimiter=',', dtype=float)  # x, y
+        # Build a relative path.
+        # First, get the path of where the command was ran
+        # Second, get the path from 1 to the csv file (User Input)
+        # Third, get the file name (User Input)
+        # Last, append everything for the file path
+        self.path = f"{os.path.abspath(os.getcwd())}/{self.path}{self.filename}"
+
+        self.get_logger().info(f'Reading file from: %s' %
+                               self.path)
+
+        wp = np.loadtxt(self.path, delimiter=',', dtype=float)  # x, y
         wp = np.concatenate((wp, np.zeros(shape=(len(wp), 1), dtype=float)), axis=1)    # x, y, z
 
         self.visualize_waypoints(wp)
@@ -126,9 +141,7 @@ class PurePursuit(Node):
 
     #region POSE
     def pose_callback(self, pose_msg):
-        relative_directory = "/sim_ws/src/pure_pursuit/pure_pursuit/"
-
-        waypoint_array = self.readCSV(relative_directory + "waypoints.csv")
+        waypoint_array = self.readCSV(self.path)
 
         vehicle_pos = np.array([pose_msg.pose.pose.position.x, pose_msg.pose.pose.position.y, 0])
         vehicle_orientation = np.array([pose_msg.pose.pose.orientation.w,
@@ -149,6 +162,15 @@ class PurePursuit(Node):
         rotation_inv = vehicle_orientation * [1, -1, -1, -1] / np.sum(vehicle_orientation ** 2)
 
         waypoints_vehicle_frame = self.transform_waypoints(vehicle_pos, within_lookahead_points, rotation_inv)
+
+        if (len(waypoints_vehicle_frame) == 0):
+            self.get_logger().info(
+                "No waypoint found. Drive straight..."
+            )
+
+            # Nothing found, just drive straight
+            self.publish_ackerman(self.speed, 0.0)
+            return
 
         # Select target waypoint (furthest within lookahead in front of vehicle)
         # Get all waypoints with x values greater than 0
@@ -207,11 +229,15 @@ class PurePursuit(Node):
         else:
             self.speed = 0.5
 
-        self.publish_ackerman(self.speed, steering_angle, False)
+        self.publish_ackerman(self.speed, steering_angle)
         pass
 
 
     def transform_waypoints(self, vehicle_pos, within_lookahead_points, rotation_inv):
+        if len(within_lookahead_points) == 0:
+            return []       # Return nothing
+            return [[1,0]]
+
         # translation, place origin onto vehicle
         # if the vehicle is at (3, 2) and wp is (5, 6)
         # local frame is now (2, 4)
@@ -302,3 +328,5 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+
+#WINNER WINNER CHICKEN DINNER
