@@ -169,7 +169,7 @@ class PurePursuit(Node):
             )
 
             # Nothing found, just drive straight
-            self.publish_ackerman(self.speed, 0.0)
+            # self.publish_ackerman(self.speed, 0.0)
             return
 
         # Select target waypoint (furthest within lookahead in front of vehicle)
@@ -236,7 +236,6 @@ class PurePursuit(Node):
     def transform_waypoints(self, vehicle_pos, within_lookahead_points, rotation_inv):
         if len(within_lookahead_points) == 0:
             return []       # Return nothing
-            return [[1,0]]
 
         # translation, place origin onto vehicle
         # if the vehicle is at (3, 2) and wp is (5, 6)
@@ -305,6 +304,7 @@ class PurePursuit(Node):
             temp_dist = pow(x2_x1_square + y2_y1_square, 0.5)
 
             # self.get_logger().info("temp_dist: %f" % temp_dist)
+            # self.get_logger().info("Lookahead: %f" % self.lookahead)
             if (temp_dist < self.lookahead):
                within_lookahead.append([waypoint_x, waypoint_y, 0])
 

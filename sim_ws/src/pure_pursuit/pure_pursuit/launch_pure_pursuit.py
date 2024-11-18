@@ -14,6 +14,8 @@ def generate_launch_description():
         parameters = [
             {'mode' : LaunchConfiguration('mode', default = 'sim')},
             {'speed' : LaunchConfiguration('speed', default = '1.0')},
+            {'turbo' : LaunchConfiguration('turbo', default = '1.0')},
+            {'lookahead' : LaunchConfiguration('lookahead', default = '1.0')},
             {'path' : LaunchConfiguration('path', default = "pure_pursuit/pure_pursuit/")},
             {'filename' : LaunchConfiguration('filename', default = "waypoints.csv")},
         ]
