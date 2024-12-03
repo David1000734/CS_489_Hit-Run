@@ -29,6 +29,12 @@ class PurePursuit(Node):
         self.declare_parameter('path', "pure_pursuit/pure_pursuit/")
         self.declare_parameter('filename', "waypoints.csv")
 
+        # Max range to look for waypoints near the car
+        self.declare_parameter('wpdif', float(1.5))
+
+        # How many iterative waypoints to return. (lookahead)
+        self.declare_parameter('wpnum', 5)
+
 
         mode = self.get_parameter('mode').get_parameter_value().string_value
         self.turbo = self.get_parameter('turbo').get_parameter_value().double_value
@@ -37,6 +43,9 @@ class PurePursuit(Node):
         self.default_speed = self.speed
         self.path = self.get_parameter('path').get_parameter_value().string_value
         self.filename = self.get_parameter('filename').get_parameter_value().string_value
+        self.wp_dif = self.get_parameter('wpdif').get_parameter_value().double_value
+        self.wp_num = self.get_parameter('wpnum').get_parameter_value().integer_value
+
 
         if mode == 'sim':
             mode = '/ego_racecar/odom'
@@ -151,7 +160,10 @@ class PurePursuit(Node):
 
         # Calculate distances to waypoints and filter by LOOKAHEAD_DISTANCE
         # Selecting all waypoints within lookahead for transformation to car frame
-        within_lookahead_points = self.find_nearest_waypoint(waypoint_array, vehicle_pos)
+        # within_lookahead_points = self.find_nearest_waypoint(waypoint_array, vehicle_pos)
+
+        # Will look for the next iterative waypoint instead
+        within_lookahead_points = self.find_next_waypoint(waypoint_array, vehicle_pos)
 
         # w is the real scalar value
         # Calculate inverse quaternion by
@@ -309,6 +321,109 @@ class PurePursuit(Node):
                within_lookahead.append([waypoint_x, waypoint_y, 0])
 
         return within_lookahead
+    
+    def find_next_waypoint(self, waypoint_array, vehicle_pos):
+        # Vehicle X: vehicle_pos[0]
+        # Vehicle Y: vehicle_pos[1]
+        within_iteration = []
+        center_idx = 0
+
+        # Find the waypoint closest to the vehicle right now
+        for (idx, waypoint) in enumerate(waypoint_array):
+            # Is the vehicle's X and Y within range +- N
+            if (self.within_range(waypoint[0], vehicle_pos[0], self.wp_dif) and
+                self.within_range(waypoint[1], vehicle_pos[1], self.wp_dif)):
+                # Waypoint is within range for both X and Y
+                # NOTE: Last value is not used, we will use it to remember the index
+                within_iteration.append([waypoint[0], waypoint[1], idx])
+        # For, END
+
+        try:
+            # From those within range, grab the middle-most index, rounded DOWN
+            center_idx = within_iteration[math.floor(len(within_iteration) / 2)][-1]
+        except IndexError as error: 
+            # Array was empty, no middle found
+            return []
+
+        temp_array = []
+
+        ### Drive Clock-Wise
+        # From that waypoint, grab the next N waypoints
+        # First figure out if idx - N is out of bounds
+        if (center_idx - self.wp_num < 0):
+            # It is, split it up
+            difference = abs(center_idx - self.wp_num)
+            first_split = len(waypoint_array) - (self.wp_num - difference)
+
+            # self.get_logger().info(
+            #     "\nMath: %d\nDifference: %d\nFirst Split: %d" %
+            #     (center_idx - self.wp_num, difference, first_split)
+            # )
+
+            # First split will be from max - difference up to max
+            temp_array = waypoint_array[ first_split: ][ : ]
+
+            # Second split will be from 0 up to the difference
+            temp_array += waypoint_array[ 0:difference ][ : ]
+        else:
+            # It is not, just grab the values
+            temp_array = waypoint_array[center_idx - self.wp_num : center_idx][ : ]
+        # If else, END
+
+        ### Drive Counter Clock-Wise, UNTESTED
+
+        # # From that waypoint, grab the next N waypoints
+        # # First figure out if idx + N is out of bounds
+        # if (center_idx + self.wp_num > len(waypoint_array)):
+        #     # It is too big, split it up
+        #     difference = len(waypoint_array) - center_idx
+        #     second_split = self.wp_num - difference
+
+        #     # First split will be from center_idx up to the max
+        #     temp_array = waypoint_array[ center_idx: ][ :-1 ]
+
+        #     # Second split will be from beginning up to the rest
+        #     temp_array += waypoint_array[ 0:second_split ][ :-1 ]
+        # else:
+        #     # It is not too big, just grab the values
+        #     temp_array = waypoint_array[center_idx : center_idx + self.wp_num][ :-1 ]
+        # Note, if the current waypoint + N waypoints goes out of bounds,
+        # Grab the difference from the beginning of the list
+
+        ### Drive Counter Clock-Wise, UNTESTED
+
+        within_iteration = []
+
+        # Fix size issue I don't know how to remove that last element
+        # Within Return: [[-6.05699, 1.589686, 0.182606, 0.5], [-5.806229, 1.635992, 0.182606, 0.5], [-5.560386, 1.681391, 0.182606, 0.5], [-5.314542, 1.726789, 0.182606, 0.5]]
+        for idx, waypoint in enumerate(temp_array):
+            within_iteration.append([waypoint[0], waypoint[1], 0])
+
+        # Return those waypoints
+        return within_iteration
+    
+
+    def within_range(self, X, target, within_range) -> bool:
+        """ Function will simply answer the question, Is X within target with
+            a range of within_range. 
+            
+            Ex.
+            Is 5 within 6 with a range of 2.
+
+            Thus is 5 greater than 6 - 2 and less than than 6 + 2
+
+            4 < 5 < 8 will return True
+
+            NOTE: x + within_range < target < x - within_range
+        """
+        is_within_range = True
+
+        # If X is too small or too large, return false
+        if (X < target - within_range or
+            X > target + within_range):
+            is_within_range = False
+
+        return is_within_range
 
     def shutdown(self):
         self.get_logger().info('Pursuit node ended itself.')
