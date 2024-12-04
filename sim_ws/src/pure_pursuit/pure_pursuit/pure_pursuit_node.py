@@ -11,8 +11,6 @@ from visualization_msgs.msg import Marker, MarkerArray
 import os
 
 # TODO CHECK: include needed ROS msg type headers and libraries
-previous_node_pointed = -1
-previous_node_pointed = 1
 
 class PurePursuit(Node):
     """ 
@@ -165,12 +163,6 @@ class PurePursuit(Node):
         # Selecting all waypoints within lookahead for transformation to car frame
         # within_lookahead_points = self.find_nearest_waypoint(waypoint_array, vehicle_pos)
 
-        # Will look for the next iterative waypoint instead
-        # global previous_node_pointed
-        # if (previous_node_pointed == -1):
-        #     within_lookahead_points = self.find_nearest_waypoint(waypoint_array, vehicle_pos)
-        # else:
-
         within_lookahead_points = self.find_next_waypoint(waypoint_array, vehicle_pos)
 
         # w is the real scalar value
@@ -207,12 +199,6 @@ class PurePursuit(Node):
             return
 
         target_idx = np.argmax(front_waypoints[:, 0])
-
-        # previous_node_pointed = target_idx
-
-        # target_idx = INDEX IN CSV FILE
-
-        # front-waypoints[target_idx] = WAYPOINT
 
         # picks biggest x value (Pick the furthest waypoint) 
         # arg max returns index of waypoint with greatest x value 
@@ -390,27 +376,11 @@ class PurePursuit(Node):
         # Find the waypoint closest to the vehicle right now
         within_iteration = self.find_nearest_waypoint(waypoint_array, vehicle_pos)
 
-        # # Find the waypoint closest to the vehicle via
-        # # sampling all waypoints near the vehicle
-        # for (idx, waypoint) in enumerate(waypoint_array):
-        #     # Is the vehicle's X and Y within range +- N
-        #     if (self.within_range(waypoint[0], vehicle_pos[0], self.wp_dif) and
-        #         self.within_range(waypoint[1], vehicle_pos[1], self.wp_dif)):
-        #         # Waypoint is within range for both X and Y
-        #         # NOTE: Last value is not used, we will use it to remember the index
-        #         within_iteration.append([waypoint[0], waypoint[1], idx])
-        # # For, END
-
         try:
             # Determine if we have a previous waypoint already
             if (self.prev_idx is None):
                 # Find the smallest waypoint and get only the idx out of it
                 center_idx = min(within_iteration)[-1]      # ValueError
-
-                # self.get_logger().info(
-                #     "\nPrev NONE\nCenter IDX: %i\n" %
-                #     (center_idx)
-                # )
 
                 self.prev_idx = center_idx
             else:
@@ -418,18 +388,9 @@ class PurePursuit(Node):
                 # If we do have a previous waypoint,
                 # the next waypoint must be near this one
 
-                # self.get_logger().info(
-                #     "\nBefore check: %s\n" %
-                #     (within_iteration)
-                # )
-
                 # Rebuild the array with only those close to the idx
                 for (idx, waypoint) in enumerate(within_iteration):
                     vehicle_idx = self.prev_idx
-                    # self.get_logger().info(
-                    #     "Prev: %i\nWaypoint: %i\n" %
-                    #     (self.prev_idx, waypoint[-1])
-                    # )
 
                     # If our previous waypoint is 0, that means we need to
                     # loop back around the list
@@ -445,19 +406,7 @@ class PurePursuit(Node):
 
                 center_idx = wp_in_range[math.floor(len(wp_in_range) / 2)][-1]      # IndexError
 
-                # self.get_logger().info(
-                #     "\nAfter rebuilding: %s\nCenter IDX: %s\nPrevious: %i\nWithin: %s\n" %
-                #     (str(wp_in_range), str(center_idx), self.prev_idx, str(within_iteration))
-                # )
-
                 self.prev_idx = center_idx
-
-                # self.get_logger().info(
-                #     "\nNew Prev: %i\n" %
-                #     (self.prev_idx)
-                # )
-
-                # rclpy.shutdown()
             # if else, END
 
         except (IndexError, ValueError) as error:
