@@ -11,6 +11,8 @@ from visualization_msgs.msg import Marker, MarkerArray
 import os
 
 # TODO CHECK: include needed ROS msg type headers and libraries
+previous_node_pointed = -1
+previous_node_pointed = 1
 
 class PurePursuit(Node):
     """ 
@@ -35,7 +37,6 @@ class PurePursuit(Node):
         # How many iterative waypoints to return. (lookahead)
         self.declare_parameter('wpnum', 5)
 
-
         mode = self.get_parameter('mode').get_parameter_value().string_value
         self.turbo = self.get_parameter('turbo').get_parameter_value().double_value
         self.lookahead = self.get_parameter('lookahead').get_parameter_value().double_value
@@ -46,6 +47,8 @@ class PurePursuit(Node):
         self.wp_dif = self.get_parameter('wpdif').get_parameter_value().double_value
         self.wp_num = self.get_parameter('wpnum').get_parameter_value().integer_value
 
+        # Keep track of the previous waypoint
+        self.prev_idx = None
 
         if mode == 'sim':
             mode = '/ego_racecar/odom'
@@ -163,6 +166,11 @@ class PurePursuit(Node):
         # within_lookahead_points = self.find_nearest_waypoint(waypoint_array, vehicle_pos)
 
         # Will look for the next iterative waypoint instead
+        # global previous_node_pointed
+        # if (previous_node_pointed == -1):
+        #     within_lookahead_points = self.find_nearest_waypoint(waypoint_array, vehicle_pos)
+        # else:
+
         within_lookahead_points = self.find_next_waypoint(waypoint_array, vehicle_pos)
 
         # w is the real scalar value
@@ -174,6 +182,13 @@ class PurePursuit(Node):
         rotation_inv = vehicle_orientation * [1, -1, -1, -1] / np.sum(vehicle_orientation ** 2)
 
         waypoints_vehicle_frame = self.transform_waypoints(vehicle_pos, within_lookahead_points, rotation_inv)
+
+
+        # self.get_logger().info(
+        #     "Within Lookahead: %s\nVehicle Frame: %s\n" %
+        #     (str(within_lookahead_points), str(waypoints_vehicle_frame))
+        # )
+        # rclpy.shutdown()
 
         if (len(waypoints_vehicle_frame) == 0):
             self.get_logger().info(
@@ -192,6 +207,12 @@ class PurePursuit(Node):
             return
 
         target_idx = np.argmax(front_waypoints[:, 0])
+
+        # previous_node_pointed = target_idx
+
+        # target_idx = INDEX IN CSV FILE
+
+        # front-waypoints[target_idx] = WAYPOINT
 
         # picks biggest x value (Pick the furthest waypoint) 
         # arg max returns index of waypoint with greatest x value 
@@ -241,10 +262,45 @@ class PurePursuit(Node):
         else:
             self.speed = 0.5
 
+        # Dont POST for now
         self.publish_ackerman(self.speed, steering_angle)
         pass
 
 
+    def transform_dict_waypoints(self, vehicle_pos, within_lookahead_points, rotation_inv):
+        if (len(within_lookahead_points) ==0):
+            return {}
+
+        waypoints_translated = {}
+
+        for key, value in within_lookahead_points.items():
+            # Subtract corresponding elements
+            translated = [v - vp for v, vp in zip(value, vehicle_pos)]
+            waypoints_translated[key] = translated
+
+        # Extract only the x, y components (remove the z component)
+        way_points_x_y = {key: value[:-1] for key, value in waypoints_translated.items()}
+
+        orientation_w = rotation_inv[0]
+        orientation_z = rotation_inv[-1]
+
+        theta = 2 * np.arctan2(orientation_z, orientation_w)
+        cos_theta = math.cos(theta)
+        sin_theta = math.sin(theta)
+        rotation_matrix = np.array([[cos_theta, -sin_theta], [sin_theta, cos_theta]])
+
+        waypoints_rotated = {}
+
+        for key, value in way_points_x_y.items():
+            point = np.array(value)
+            # Apply the rotation matrix
+            rotated_point = np.dot(rotation_matrix, point)
+            # Store the rotated point in the dictionary
+            waypoints_rotated[key] = rotated_point.tolist()
+
+        return waypoints_rotated
+
+    # Region Transform
     def transform_waypoints(self, vehicle_pos, within_lookahead_points, rotation_inv):
         if len(within_lookahead_points) == 0:
             return []       # Return nothing
@@ -307,7 +363,7 @@ class PurePursuit(Node):
         vehicle_pos_x = vehicle_pos[0]
         vehicle_pos_y = vehicle_pos[1]
         within_lookahead = []
-        for waypoint in waypoint_array:
+        for (idx, waypoint) in enumerate(waypoint_array):
             waypoint_x = float(waypoint[0])
             waypoint_y = float(waypoint[1])
 
@@ -318,31 +374,99 @@ class PurePursuit(Node):
             # self.get_logger().info("temp_dist: %f" % temp_dist)
             # self.get_logger().info("Lookahead: %f" % self.lookahead)
             if (temp_dist < self.lookahead):
-               within_lookahead.append([waypoint_x, waypoint_y, 0])
+                # NOTE: Last value is not used, we will use it to remember the index
+               within_lookahead.append([waypoint_x, waypoint_y, idx])
 
         return within_lookahead
-    
+
     def find_next_waypoint(self, waypoint_array, vehicle_pos):
         # Vehicle X: vehicle_pos[0]
         # Vehicle Y: vehicle_pos[1]
         within_iteration = []
+
+        # Index of the waypoint the vehicle is closest to
         center_idx = 0
 
         # Find the waypoint closest to the vehicle right now
-        for (idx, waypoint) in enumerate(waypoint_array):
-            # Is the vehicle's X and Y within range +- N
-            if (self.within_range(waypoint[0], vehicle_pos[0], self.wp_dif) and
-                self.within_range(waypoint[1], vehicle_pos[1], self.wp_dif)):
-                # Waypoint is within range for both X and Y
-                # NOTE: Last value is not used, we will use it to remember the index
-                within_iteration.append([waypoint[0], waypoint[1], idx])
-        # For, END
+        within_iteration = self.find_nearest_waypoint(waypoint_array, vehicle_pos)
+
+        # # Find the waypoint closest to the vehicle via
+        # # sampling all waypoints near the vehicle
+        # for (idx, waypoint) in enumerate(waypoint_array):
+        #     # Is the vehicle's X and Y within range +- N
+        #     if (self.within_range(waypoint[0], vehicle_pos[0], self.wp_dif) and
+        #         self.within_range(waypoint[1], vehicle_pos[1], self.wp_dif)):
+        #         # Waypoint is within range for both X and Y
+        #         # NOTE: Last value is not used, we will use it to remember the index
+        #         within_iteration.append([waypoint[0], waypoint[1], idx])
+        # # For, END
 
         try:
-            # From those within range, grab the middle-most index, rounded DOWN
-            center_idx = within_iteration[math.floor(len(within_iteration) / 2)][-1]
-        except IndexError as error: 
+            # Determine if we have a previous waypoint already
+            if (self.prev_idx is None):
+                # Find the smallest waypoint and get only the idx out of it
+                center_idx = min(within_iteration)[-1]      # ValueError
+
+                # self.get_logger().info(
+                #     "\nPrev NONE\nCenter IDX: %i\n" %
+                #     (center_idx)
+                # )
+
+                self.prev_idx = center_idx
+            else:
+                wp_in_range = []
+                # If we do have a previous waypoint,
+                # the next waypoint must be near this one
+
+                # self.get_logger().info(
+                #     "\nBefore check: %s\n" %
+                #     (within_iteration)
+                # )
+
+                # Rebuild the array with only those close to the idx
+                for (idx, waypoint) in enumerate(within_iteration):
+                    vehicle_idx = self.prev_idx
+                    # self.get_logger().info(
+                    #     "Prev: %i\nWaypoint: %i\n" %
+                    #     (self.prev_idx, waypoint[-1])
+                    # )
+
+                    # If our previous waypoint is 0, that means we need to
+                    # loop back around the list
+                    if (self.prev_idx == 0):
+                        # Consider waypoints near the end of the list instead
+                        vehicle_idx = len(waypoint_array)
+
+                    # Only consider waypoints within 20 indexs around the vehicle
+                    if (self.within_range(vehicle_idx, waypoint[-1], 20)):
+                        wp_in_range.append([waypoint[0], waypoint[1], waypoint[2]])
+
+                # for, END
+
+                center_idx = wp_in_range[math.floor(len(wp_in_range) / 2)][-1]      # IndexError
+
+                # self.get_logger().info(
+                #     "\nAfter rebuilding: %s\nCenter IDX: %s\nPrevious: %i\nWithin: %s\n" %
+                #     (str(wp_in_range), str(center_idx), self.prev_idx, str(within_iteration))
+                # )
+
+                self.prev_idx = center_idx
+
+                # self.get_logger().info(
+                #     "\nNew Prev: %i\n" %
+                #     (self.prev_idx)
+                # )
+
+                # rclpy.shutdown()
+            # if else, END
+
+        except (IndexError, ValueError) as error:
+            self.get_logger().info(
+                "Index Selection Error: \n%s" %
+                (error)
+            )
             # Array was empty, no middle found
+            self.prev_idx = None
             return []
 
         temp_array = []
@@ -393,6 +517,8 @@ class PurePursuit(Node):
         ### Drive Counter Clock-Wise, UNTESTED
 
         within_iteration = []
+
+        # temp_without_last = [row[:-1] for row in temp_array]
 
         # Fix size issue I don't know how to remove that last element
         # Within Return: [[-6.05699, 1.589686, 0.182606, 0.5], [-5.806229, 1.635992, 0.182606, 0.5], [-5.560386, 1.681391, 0.182606, 0.5], [-5.314542, 1.726789, 0.182606, 0.5]]
