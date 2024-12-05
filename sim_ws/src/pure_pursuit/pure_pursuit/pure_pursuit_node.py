@@ -248,7 +248,6 @@ class PurePursuit(Node):
         else:
             self.speed = 0.5
 
-        # Dont POST for now
         self.publish_ackerman(self.speed, steering_angle)
         pass
 
@@ -388,21 +387,42 @@ class PurePursuit(Node):
                 # If we do have a previous waypoint,
                 # the next waypoint must be near this one
 
-                # Rebuild the array with only those close to the idx
-                for (idx, waypoint) in enumerate(within_iteration):
-                    vehicle_idx = self.prev_idx
+                # array_length = len(waypoint_array)
 
-                    # If our previous waypoint is 0, that means we need to
-                    # loop back around the list
-                    if (self.prev_idx == 0):
-                        # Consider waypoints near the end of the list instead
-                        vehicle_idx = len(waypoint_array)
+                # if (array_length - 1 in temp):
+                #     # If we reached the end of the list, just return
+                #     # the first 20 values in the list
+                #     for i in range(array_length - 20, array_length):
+                #         waypoint = waypoint_array[i]
+                #         wp_in_range.append([waypoint[0], waypoint[1], 0])
+                # else:
+                #     # Otherwise, Check to add points
+                #     wp_in_range = [wp for wp in within_iteration if self.within_range(wp[-1], self.prev_idx, 20)]
 
-                    # Only consider waypoints within 20 indexs around the vehicle
-                    if (self.within_range(vehicle_idx, waypoint[-1], 20)):
-                        wp_in_range.append([waypoint[0], waypoint[1], waypoint[2]])
+                # if (self.prev_idx - 40 < 0):
+                #     # If it is less, split it up
+                #     difference = abs(self.prev_idx - 40)
+                #     first_split = array_length - (40 - difference)
 
-                # for, END
+                #     valid_range = list(range(first_split, array_length))
+                #     valid_range += list(range(0, difference))
+                # else:
+                #     valid_range = list(range(self.prev_idx, self.prev_idx))
+                # # if else, END
+                # self.get_logger().info(
+                #     "Within Iter: %s" %
+                #     (str(within_iteration))
+                # )
+
+                # self.get_logger().info(
+                #     "valid index: %s" %
+                #     (str(valid_range))
+                # )
+
+                # wp_in_range = [wp for wp in within_iteration if wp[-1] in valid_range]
+
+                # Find values that are closest to the car
+                wp_in_range = [wp for wp in within_iteration if self.within_range(wp[-1], self.prev_idx, 20)]
 
                 center_idx = wp_in_range[math.floor(len(wp_in_range) / 2)][-1]      # IndexError
 
@@ -414,34 +434,17 @@ class PurePursuit(Node):
                 "Index Selection Error: \n%s" %
                 (error)
             )
+
+            # self.get_logger().info(
+            #         "\nRange: %s\nwithin: %s\n" %
+            #         (str(wp_in_range), str(within_iteration))
+            #     )
+
             # Array was empty, no middle found
             self.prev_idx = None
             return []
 
-        temp_array = []
-
-        ### Drive Clock-Wise
-        # From that waypoint, grab the next N waypoints
-        # First figure out if idx - N is out of bounds
-        if (center_idx - self.wp_num < 0):
-            # It is, split it up
-            difference = abs(center_idx - self.wp_num)
-            first_split = len(waypoint_array) - (self.wp_num - difference)
-
-            # self.get_logger().info(
-            #     "\nMath: %d\nDifference: %d\nFirst Split: %d" %
-            #     (center_idx - self.wp_num, difference, first_split)
-            # )
-
-            # First split will be from max - difference up to max
-            temp_array = waypoint_array[ first_split: ][ : ]
-
-            # Second split will be from 0 up to the difference
-            temp_array += waypoint_array[ 0:difference ][ : ]
-        else:
-            # It is not, just grab the values
-            temp_array = waypoint_array[center_idx - self.wp_num : center_idx][ : ]
-        # If else, END
+        temp_array = self.array_splicing(waypoint_array, center_idx, self.wp_num)
 
         ### Drive Counter Clock-Wise, UNTESTED
 
@@ -499,6 +502,41 @@ class PurePursuit(Node):
             is_within_range = False
 
         return is_within_range
+
+    def array_splicing(self, array: list, point: int, N: int) -> list:
+        ### Drive Clock-Wise
+        # From that waypoint, grab the next N waypoints
+        # First figure out if idx - N is out of bounds
+        if (point - N < 0):
+            # It is, split it up
+            difference = abs(point - N)
+            first_split = len(array) - (N - difference)
+
+            # self.get_logger().info(
+            #     "\nMath: %d\nDifference: %d\nFirst Split: %d" %
+            #     (point - N, difference, first_split)
+            # )
+
+            # First split will be from max - difference up to max
+            temp_array = array[ first_split: ][ : ]
+
+            # Second split will be from 0 up to the difference
+            temp_array += array[ 0:difference ][ : ]
+
+            # self.get_logger().info(
+            #     "Second array: %s" %
+            #     (str(temp_array))
+            # )
+        else:
+            # It is not, just grab the values
+            temp_array = array[point - N : point][ : ]
+
+            # self.get_logger().info(
+            #     "No split: %s\nPoint - N: %i\npoint: %iarray: %s" %
+            #     (str(temp_array), point - N, point, str(array))
+            # )        # If else, END
+
+        return temp_array
 
     def shutdown(self):
         self.get_logger().info('Pursuit node ended itself.')
