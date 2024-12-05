@@ -369,6 +369,8 @@ class PurePursuit(Node):
         # Vehicle Y: vehicle_pos[1]
         within_iteration = []
 
+        csvsize = len(waypoint_array)
+
         # Index of the waypoint the vehicle is closest to
         center_idx = 0
 
@@ -422,7 +424,7 @@ class PurePursuit(Node):
                 # wp_in_range = [wp for wp in within_iteration if wp[-1] in valid_range]
 
                 # Find values that are closest to the car
-                wp_in_range = [wp for wp in within_iteration if self.within_range(wp[-1], self.prev_idx, 20)]
+                wp_in_range = [wp for wp in within_iteration if self.within_range(wp[-1], self.prev_idx, 20, csvsize)]
 
                 center_idx = wp_in_range[math.floor(len(wp_in_range) / 2)][-1]      # IndexError
 
@@ -479,9 +481,9 @@ class PurePursuit(Node):
 
         # Return those waypoints
         return within_iteration
-    
 
-    def within_range(self, X, target, within_range) -> bool:
+
+    def within_range(self, X, target, within_range, csvsize) -> bool:
         """ Function will simply answer the question, Is X within target with
             a range of within_range. 
             
@@ -497,9 +499,19 @@ class PurePursuit(Node):
         is_within_range = True
 
         # If X is too small or too large, return false
-        if (X < target - within_range or
-            X > target + within_range):
-            is_within_range = False
+        # if (X < target - within_range or
+        #     X > target + within_range):
+        #     is_within_range = False
+
+        lower_bound = (target - within_range) % csvsize
+        upper_bound = (target + within_range) % csvsize
+
+        # Check if X is within the looped range
+        if lower_bound <= upper_bound:
+            is_within_range = lower_bound <= X <= upper_bound
+        else:
+            # Handles the case where the range wraps around
+            is_within_range = X >= lower_bound or X <= upper_bound
 
         return is_within_range
 
