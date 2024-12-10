@@ -18,7 +18,6 @@ def generate_launch_description():
             {'lookahead' : LaunchConfiguration('lookahead', default = '1.0')},
             {'path' : LaunchConfiguration('path', default = "pure_pursuit/pure_pursuit/")},
             {'filename' : LaunchConfiguration('filename', default = "waypoints.csv")},
-            {'wpdif' : LaunchConfiguration('wpdif', default = "1.5")},
             {'wpnum' : LaunchConfiguration('wpnum', default = "5")}
         ]
     )

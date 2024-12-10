@@ -29,9 +29,6 @@ class PurePursuit(Node):
         self.declare_parameter('path', "pure_pursuit/pure_pursuit/")
         self.declare_parameter('filename', "waypoints.csv")
 
-        # Max range to look for waypoints near the car
-        self.declare_parameter('wpdif', float(1.5))
-
         # How many iterative waypoints to return. (lookahead)
         self.declare_parameter('wpnum', 5)
 
@@ -42,8 +39,11 @@ class PurePursuit(Node):
         self.default_speed = self.speed
         self.path = self.get_parameter('path').get_parameter_value().string_value
         self.filename = self.get_parameter('filename').get_parameter_value().string_value
-        self.wp_dif = self.get_parameter('wpdif').get_parameter_value().double_value
         self.wp_num = self.get_parameter('wpnum').get_parameter_value().integer_value
+
+        # Const values that should not change
+        self.STATIC_WP_NUM = self.wp_num
+        self.STATIC_LOOKAHEAD = self.lookahead
 
         # Keep track of the previous waypoint
         self.prev_idx = None
@@ -213,40 +213,74 @@ class PurePursuit(Node):
         steering_angle = steering_angle * 0.5 * np.sign(target_waypoint[1])
         #MARKER
 
+        # Steering angle is currently in radians. The conditions below are in degrees
+        # Convert from radians to degrees
+        converted_steering_angle = self.radian_to_degree(steering_angle)
+
         #angle cut off
-        if (steering_angle > 24.0):
-            steering_angle = 24.0
-        if (steering_angle < -24.0):
-            steering_angle = -24.0
+        if (converted_steering_angle > 24.0):
+            converted_steering_angle = 24.0
+        if (converted_steering_angle < -24.0):
+            converted_steering_angle = -24.0
 
         #region SPEED
-        if ((steering_angle >= -4.0000) and (steering_angle <= 4.0000)):
+        if ((converted_steering_angle >= -4.0000) and (converted_steering_angle <= 4.0000)):
             # Speed will be specified by the launch parameters
             # If less than 20 and greater than 10
             self.speed = self.default_speed
             self.speed *= self.turbo
-        elif ((steering_angle > 4.0000 and steering_angle <= 8.0000) or
-                 (steering_angle < -4.0000 and steering_angle >= -8.0000)):
+
+            # # Just going straight, we should increase lookahead.
+            # # Use the static one in case the regular one has changed
+            # self.lookahead = self.dynamic_increment(self.STATIC_LOOKAHEAD, True)
+            # self.wp_num = self.dynamic_increment(self.STATIC_WP_NUM, True)
+
+        elif ((converted_steering_angle > 4.0000 and converted_steering_angle <= 8.0000) or
+                 (converted_steering_angle < -4.0000 and converted_steering_angle >= -8.0000)):
             self.speed = self.default_speed
             self.speed = self.speed
-        elif ((steering_angle > 8.0000 and steering_angle <= 12.0000) or
-                 (steering_angle < -8.0000 and steering_angle >= -12.0000)):
+
+            # # Still straight enough, we should increase lookahead.
+            # # Use the static one in case the regular one has changed
+            # self.lookahead = self.dynamic_increment(self.STATIC_LOOKAHEAD, True)
+            # self.wp_num = self.dynamic_increment(self.STATIC_WP_NUM, True)
+
+        elif ((converted_steering_angle > 8.0000 and converted_steering_angle <= 12.0000) or
+                 (converted_steering_angle < -8.0000 and converted_steering_angle >= -12.0000)):
             self.speed = self.default_speed
             self.speed *= .85
-        elif ((steering_angle > 12.0000 and steering_angle <= 14.0000) or
-                 (steering_angle < -12.0000 and steering_angle >= -14.0000)):
+
+            # # Turn is tighter, use normal lookahead and decreased speed
+            # self.lookahead = self.STATIC_LOOKAHEAD
+            # self.wp_num = self.STATIC_WP_NUM
+
+        elif ((converted_steering_angle > 12.0000 and converted_steering_angle <= 14.0000) or
+                 (converted_steering_angle < -12.0000 and converted_steering_angle >= -14.0000)):
             self.speed = self.default_speed
             self.speed *= .75
-        elif ((steering_angle > 14.0000 and steering_angle < 24.0001) or
-                 (steering_angle < -14.0000 and steering_angle > -24.0001)):
-            if (self.speed * .65 > .75):
-                self.speed = self.default_speed
-                self.speed = .75
-            else: 
-                self.speed = self.default_speed
-                self.speed *= .65
+
+            # # Tight turn, use smaller lookahead and decrease speed
+            # self.lookahead = self.dynamic_increment(self.STATIC_LOOKAHEAD, False)
+            # self.wp_num = self.dynamic_increment(self.STATIC_WP_NUM, False)
+
+        elif ((converted_steering_angle > 14.0000 and converted_steering_angle < 24.0001) or
+                 (converted_steering_angle < -14.0000 and converted_steering_angle > -24.0001)):
+            self.speed = self.default_speed
+            self.speed *= .65
+
+            # # Tighter turn, use smaller lookahead and decrease speed
+            # self.lookahead = self.dynamic_increment(self.STATIC_LOOKAHEAD, False)
+            # self.wp_num = self.dynamic_increment(self.STATIC_WP_NUM, False)
+
         else:
-            self.speed = 0.5
+            self.speed = self.default_speed
+            self.speed *= 0.5
+
+            # # Tightest turn, use smaller lookahead and decrease speed
+            # self.lookahead = self.dynamic_increment(self.STATIC_LOOKAHEAD, False)
+            # self.wp_num = self.dynamic_increment(self.STATIC_WP_NUM, False)
+        # After setting the correct speed, we can use the original
+        # steering angle in radians to specify where to turn
 
         self.publish_ackerman(self.speed, steering_angle)
         pass
@@ -383,51 +417,23 @@ class PurePursuit(Node):
                 # Find the smallest waypoint and get only the idx out of it
                 center_idx = min(within_iteration)[-1]      # ValueError
 
+                # Update previous index
                 self.prev_idx = center_idx
+
+                # self.get_logger().info(
+                #     "Localizer ran this time: %i\n" %
+                #     self.prev_idx
+                # )
             else:
                 wp_in_range = []
                 # If we do have a previous waypoint,
                 # the next waypoint must be near this one
-
-                # array_length = len(waypoint_array)
-
-                # if (array_length - 1 in temp):
-                #     # If we reached the end of the list, just return
-                #     # the first 20 values in the list
-                #     for i in range(array_length - 20, array_length):
-                #         waypoint = waypoint_array[i]
-                #         wp_in_range.append([waypoint[0], waypoint[1], 0])
-                # else:
-                #     # Otherwise, Check to add points
-                #     wp_in_range = [wp for wp in within_iteration if self.within_range(wp[-1], self.prev_idx, 20)]
-
-                # if (self.prev_idx - 40 < 0):
-                #     # If it is less, split it up
-                #     difference = abs(self.prev_idx - 40)
-                #     first_split = array_length - (40 - difference)
-
-                #     valid_range = list(range(first_split, array_length))
-                #     valid_range += list(range(0, difference))
-                # else:
-                #     valid_range = list(range(self.prev_idx, self.prev_idx))
-                # # if else, END
-                # self.get_logger().info(
-                #     "Within Iter: %s" %
-                #     (str(within_iteration))
-                # )
-
-                # self.get_logger().info(
-                #     "valid index: %s" %
-                #     (str(valid_range))
-                # )
-
-                # wp_in_range = [wp for wp in within_iteration if wp[-1] in valid_range]
-
-                # Find values that are closest to the car
                 wp_in_range = [wp for wp in within_iteration if self.within_range(wp[-1], self.prev_idx, 20, csvsize)]
 
+                # Grab center most index from this list
                 center_idx = wp_in_range[math.floor(len(wp_in_range) / 2)][-1]      # IndexError
 
+                # Update previous index
                 self.prev_idx = center_idx
             # if else, END
 
@@ -446,7 +452,8 @@ class PurePursuit(Node):
             self.prev_idx = None
             return []
 
-        temp_array = self.array_splicing(waypoint_array, center_idx, self.wp_num)
+        # Grab the next wp_num waypoints from the center_idx
+        within_iteration = self.array_splicing(waypoint_array, center_idx, self.wp_num)
 
         ### Drive Counter Clock-Wise, UNTESTED
 
@@ -470,14 +477,8 @@ class PurePursuit(Node):
 
         ### Drive Counter Clock-Wise, UNTESTED
 
-        within_iteration = []
-
-        # temp_without_last = [row[:-1] for row in temp_array]
-
-        # Fix size issue I don't know how to remove that last element
-        # Within Return: [[-6.05699, 1.589686, 0.182606, 0.5], [-5.806229, 1.635992, 0.182606, 0.5], [-5.560386, 1.681391, 0.182606, 0.5], [-5.314542, 1.726789, 0.182606, 0.5]]
-        for idx, waypoint in enumerate(temp_array):
-            within_iteration.append([waypoint[0], waypoint[1], 0])
+        # Remove the very last element off of each waypoint
+        within_iteration = [row[:-1] for row in within_iteration]
 
         # Return those waypoints
         return within_iteration
@@ -549,6 +550,44 @@ class PurePursuit(Node):
             # )        # If else, END
 
         return temp_array
+    
+    def dynamic_increment(self, baseValue: float, isInc: bool) -> float:
+        """
+        Function returns the operation
+        ( X +- (X / 2))
+
+        Parameters:
+            baseValue (float): Initial value to increment
+            isInc (bool): Should this function add or subtract
+
+        Returns:
+            Returns X plus or minus half of X
+            
+        Notes:
+            This function should not return anything less than X
+        """
+        operation = baseValue / 2
+
+        if (isInc):
+            # When adding, take the lowest
+            operation = math.floor(baseValue + operation)
+        else:
+            # When subtracting, take the highest
+            operation = math.ceil(baseValue - operation)
+
+        return operation
+
+    def radian_to_degree(self, radian: float) -> float:
+        """
+        Helper function to convert from radians to degrees
+        """
+        return (radian * (180 / math.pi))
+    
+    def degree_to_radian(self, degree: float) -> float:
+        """
+        Helper function to convert from degrees to radians
+        """
+        return (degree * (math.pi / 180))
 
     def shutdown(self):
         self.get_logger().info('Pursuit node ended itself.')
