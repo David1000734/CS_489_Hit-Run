@@ -188,7 +188,7 @@ class PurePursuit(Node):
             )
 
             # Nothing found, just drive straight
-            # self.publish_ackerman(self.speed, 0.0)
+            self.publish_ackerman(self.speed, 0.0)
             return
 
         # Select target waypoint (furthest within lookahead in front of vehicle)
