@@ -282,6 +282,8 @@ class PurePursuit(Node):
         # After setting the correct speed, we can use the original
         # steering angle in radians to specify where to turn
 
+        steering_angle = self.degree_to_radian(steering_angle)
+
         self.publish_ackerman(self.speed, steering_angle)
         pass
 
